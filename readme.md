@@ -1,4 +1,4 @@
-# \Photo-App\ Scrum Team
+# Photo-App - Scrum Team
 ## Product Owner
 \<Housten Clark\>
 ## Scrum Master
