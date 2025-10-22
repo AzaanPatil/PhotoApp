@@ -1,9 +1,9 @@
-# \<Project Name\> Scrum Team
+# \Photo-App\ Scrum Team
 ## Product Owner
-\<Team Member Name\>
+\<Housten Clark\>
 ## Scrum Master
-\<Team Member Name\>
+\<Liam Mays\>
 ## Developers
-- \<Team Member Name\>
-- \<Team Member Name\>
-- \<Team Member Name\>
+- \<Azaan Patil\>
+- \<Sebastian\>
+- \<Jay\>
