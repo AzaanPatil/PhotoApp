@@ -7,7 +7,7 @@
   background-color: #fafafa; /* Light background for sidebar */
   border-right: 1px solid #e0e0e0; /* Subtle divider for layout */
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow-y: auto; 
 }
 
 /* Header */
