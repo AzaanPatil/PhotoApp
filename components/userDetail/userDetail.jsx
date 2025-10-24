@@ -1,27 +1,79 @@
-import React from 'react';
+import React from "react";
 import {
-  Typography
-} from '@mui/material';
-import './userDetail.css';
-
+  Card,
+  CardContent,
+  Typography,
+} from "@mui/material"; //Stylized using MUI components
+import "./userDetail.css";
 
 /**
- * Define UserDetail, a React component of project #5
+ * Displays details for a specific user
  */
 class UserDetail extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {
+      user: null
+    };
   }
 
+  // Load user data when component mounts or when userId changes
+  componentDidMount() {
+    this.loadUser();
+  }
+
+  // Reload user data if the userId prop changes
+  componentDidUpdate(prevProps) {
+    if (prevProps.match.params.userId !== this.props.match.params.userId) {
+      this.loadUser();
+    }
+  }
+
+  // Fetch user data based on userId from props
+ loadUser() {
+  const userId = this.props.match.params.userId;
+  const userData = window.models.userModel(userId);
+  this.setState({ user: userData });
+  
+  // Update TopBar context with user's name
+  if (userData && this.props.onContextChange) {
+    this.props.onContextChange(`${userData.first_name} ${userData.last_name}`);
+  }
+}
+
+  // Render user detail view
   render() {
+    const { user } = this.state;
+
+    if (!user) {
+      return (
+        <Typography color="textSecondary">
+          No user data available.
+        </Typography>
+      );
+    }
+
+    // Display user details using MUI Card component
     return (
-      <Typography variant="body1">
-        This should be the UserDetail view of the PhotoShare app. Since
-        it is invoked from React Router the params from the route will be
-        in property match. So this should show details of user:
-        {this.props.match.params.userId}. You can fetch the model for the
-        user from window.models.userModel(userId).
-      </Typography>
+      <Card className="User-Card">
+        <CardContent>
+          <Typography variant="h5" gutterBottom>
+            {user.first_name} {user.last_name}
+          </Typography>
+
+          <Typography variant="body1" color="textSecondary" gutterBottom>
+            <strong>Location:</strong> {user.location}
+          </Typography>
+
+          <Typography variant="body1" color="textSecondary" gutterBottom>
+            <strong>Occupation:</strong> {user.occupation}
+          </Typography>
+
+          <Typography variant="body1" gutterBottom>
+            {user.description}
+          </Typography>
+        </CardContent>
+      </Card>
     );
   }
 }
