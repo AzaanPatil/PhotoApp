@@ -62,13 +62,14 @@ class UserPhotos extends React.Component {
   }
 
   loadPhotos = () => {
-    const { userId } = this.props.match.params;
-    const photos = window.models.photoOfUserModel(userId) || [];
+    const  userId  = this.props.match.params.userId;
+    const photos = window.models.photoOfUserModel(userId);
     this.setState({photos});
   };
 
   render() {
     const {photos} = this.state;
+    if(!photos) return <p>Loading photos...</p>;
     return (
       <div className="photos">
         {photos.map((p) => (

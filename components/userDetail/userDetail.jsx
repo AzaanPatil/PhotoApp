@@ -1,10 +1,12 @@
 import React from "react";
 import {
+  Button,
   Card,
   CardContent,
   Typography,
 } from "@mui/material"; //Stylized using MUI components
 import "./userDetail.css";
+import {Link} from "react-router-dom";
 
 /**
  * Displays details for a specific user
@@ -53,6 +55,7 @@ class UserDetail extends React.Component {
       );
     }
 
+    
     // Display user details using MUI Card component
     return (
       <Card className="User-Card">
@@ -72,6 +75,17 @@ class UserDetail extends React.Component {
           <Typography variant="body1" gutterBottom>
             {user.description}
           </Typography>
+
+
+          <Button
+          variant = "contained"
+          color = "primary"
+          component = {Link}
+          to = {`/photos/${user._id}`}
+          sx= {{mt:2}}
+          >
+            View {user.first_name} Photos
+          </Button>
         </CardContent>
       </Card>
     );
