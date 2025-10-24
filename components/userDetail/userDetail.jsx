@@ -3,84 +3,43 @@ import {
   Card,
   CardContent,
   Typography,
-  Button,
-  CircularProgress,
-  Box,
-} from "@mui/material"; //Styled using Material-UI components
-import { Link } from "react-router-dom"; //for navigation links
-import FetchModel from "../../lib/fetchModelData"; //utility to fetch model data
-import "./userDetail.css"; //component-specific styles
+} from "@mui/material"; //Stylized using MUI components
+import "./userDetail.css";
 
-//Displays details for a specific user
+/**
+ * Displays details for a specific user
+ */
 class UserDetail extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      user: null,
-      loading: true,
-      error: null,
+      user: null
     };
   }
 
-  // Fetch user data when component mounts
+  // Load user data when component mounts or when userId changes
   componentDidMount() {
     this.loadUser();
   }
 
-  // Refetch user data if route parameter changes
+  // Reload user data if the userId prop changes
   componentDidUpdate(prevProps) {
-    // If route parameter changes, refetch user data
     if (prevProps.match.params.userId !== this.props.match.params.userId) {
       this.loadUser();
     }
   }
 
-  // Fetch user data from API
+  // Fetch user data based on userId from props
   loadUser() {
     const userId = this.props.match.params.userId;
-
-    this.setState({ loading: true, error: null });
-
-    // Data is fetched with FetchModel from /user/:id
-    FetchModel(`/user/${userId}`)
-      .then((response) => { // Successful fetch
-        this.setState({
-          user: response.data,
-          loading: false,
-        });
-      })
-      .catch((err) => { // Handle fetch errors
-        this.setState({
-          error: `Error ${err.status}: ${err.statusText}`,
-          loading: false,
-        });
-      });
+    const userData = window.Models.userModel(userId);
+    this.setState({ user: userData });
   }
 
   // Render user detail view
   render() {
-    const { user, loading, error } = this.state;
+    const { user } = this.state;
 
-    // Show loading indicator
-    if (loading) {
-      return (
-        <Box className="User-Card-Loading">
-          <CircularProgress />
-          <Typography variant="body2">Loading user details...</Typography>
-        </Box>
-      );
-    }
-
-    // Show error message if fetch failed
-    if (error) {
-      return (
-        <Typography color="error" className="User-Card-Error">
-          {error}
-        </Typography>
-      );
-    }
-
-    // Show message if no user data is available
     if (!user) {
       return (
         <Typography color="textSecondary">
@@ -89,36 +48,25 @@ class UserDetail extends React.Component {
       );
     }
 
-    // Displays required user fields
+    // Display user details using MUI Card component
     return (
       <Card className="User-Card">
         <CardContent>
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h5" gutterBottom>
             {user.first_name} {user.last_name}
           </Typography>
 
-          <Typography variant="body1" color="textSecondary">
-            <strong>Occupation:</strong> {user.occupation}
-          </Typography>
-
-          <Typography variant="body1" color="textSecondary">
+          <Typography variant="body1" color="textSecondary" gutterBottom>
             <strong>Location:</strong> {user.location}
           </Typography>
 
-          <Typography variant="body1" sx={{ marginTop: 2 }}>
-            <strong>Description:</strong> {user.description}
+          <Typography variant="body1" color="textSecondary" gutterBottom>
+            <strong>Occupation:</strong> {user.occupation}
           </Typography>
 
-          <Box sx={{ marginTop: 3 }}>
-            <Button //Link to navigate to user's photos
-              variant="contained"
-              component={Link}
-              to={`/photos/${user._id}`}
-              color="primary"
-            >
-              View {user.first_name}'s Photos
-            </Button>
-          </Box>
+          <Typography variant="body1" gutterBottom>
+            {user.description}
+          </Typography>
         </CardContent>
       </Card>
     );
