@@ -30,11 +30,16 @@ class UserDetail extends React.Component {
   }
 
   // Fetch user data based on userId from props
-  loadUser() {
-    const userId = this.props.match.params.userId;
-    const userData = window.Models.userModel(userId);
-    this.setState({ user: userData });
+ loadUser() {
+  const userId = this.props.match.params.userId;
+  const userData = window.models.userModel(userId);
+  this.setState({ user: userData });
+  
+  // Update TopBar context with user's name
+  if (userData && this.props.onContextChange) {
+    this.props.onContextChange(`${userData.first_name} ${userData.last_name}`);
   }
+}
 
   // Render user detail view
   render() {

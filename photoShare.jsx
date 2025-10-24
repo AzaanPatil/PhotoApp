@@ -17,7 +17,15 @@ import UserPhotos from './components/userPhotos/userPhotos';
 class PhotoShare extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {
+      context: ''
+    };
   }
+
+  // Callback function to update TopBar context
+  handleContextChange = (newContext) => {
+    this.setState({ context: newContext });
+  };
 
   render() {
     return (
@@ -25,7 +33,7 @@ class PhotoShare extends React.Component {
       <div>
       <Grid container spacing={8}>
         <Grid item xs={12}>
-          <TopBar/>
+          <TopBar context={this.state.context} />
         </Grid>
         <div className="main-topbar-buffer"/>
         <Grid item sm={3}>
@@ -49,10 +57,10 @@ class PhotoShare extends React.Component {
                 )}
               />
               <Route path="/users/:userId"
-                render={ props => <UserDetail {...props} /> }
+                render={ props => <UserDetail {...props} onContextChange={this.handleContextChange} /> }
               />
               <Route path="/photos/:userId"
-                render ={ props => <UserPhotos {...props} /> }
+                render ={ props => <UserPhotos {...props} onContextChange={this.handleContextChange} /> }
               />
               <Route path="/users" component={UserList}  />
             </Switch>

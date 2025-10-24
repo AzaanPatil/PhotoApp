@@ -6,12 +6,31 @@ import './userPhotos.css';
 
 
 /**
- * Define UserPhotos, a React componment of project #5
+ * Define UserPhotos, a React component of project #5
  */
 class UserPhotos extends React.Component {
   constructor(props) {
     super(props);
+  }
 
+  componentDidMount() {
+    this.loadUserPhotos();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.match.params.userId !== this.props.match.params.userId) {
+      this.loadUserPhotos();
+    }
+  }
+
+  loadUserPhotos() {
+    const userId = this.props.match.params.userId;
+    const userData = window.Models.userModel(userId);
+    
+    // Update TopBar context with "Photos of [User Name]"
+    if (userData && this.props.onContextChange) {
+      this.props.onContextChange(`Photos of ${userData.first_name} ${userData.last_name}`);
+    }
   }
 
   render() {
@@ -26,7 +45,6 @@ class UserPhotos extends React.Component {
           {JSON.stringify(window.models.photoOfUserModel(this.props.match.params.userId))}
         </Typography>
       </Typography>
-
     );
   }
 }
