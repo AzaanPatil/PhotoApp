@@ -27,7 +27,7 @@ function PhotoCard({ photo }) {
         <div className="comments">
           {(photo.comments || []).map((c) => (
             <div key={c._id} className="comment-row">
-              <Typography variant="caption">{pretty(c.date_time)}</Typography>
+              <Typography variant="caption">{prettyDate(c.date_time)}</Typography>
               {' - '}
               <Link to={`/users/${c.user._id}`}>
                 {c.user.first_name} {c.user.last_name}
@@ -44,7 +44,13 @@ function PhotoCard({ photo }) {
 
 
 class UserPhotos extends React.Component {
-  state = { photos: [] };
+  constructor(props) {
+    super(props);
+    this.state = {
+      photos: []
+    };
+  }
+  
   componentDidMount() {
     this.loadPhotos();
   }
