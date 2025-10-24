@@ -36,7 +36,7 @@ class TopBar extends React.Component {
       <AppBar className="topbar-appBar" position="absolute">
         <Toolbar>
           <Typography variant="h5" color="inherit" style={{ flexGrow: 1 }}>
-            Jay Lingappa 
+            The CJ Strouds
           </Typography>
           {version !== ''&& (
             <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
