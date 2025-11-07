@@ -46,7 +46,7 @@ const SchemaInfo = require("./schema/schemaInfo.js");
 
 // XXX - Your submission should work without this line. Comment out or delete
 // this line for tests and before submission!
-const models = require("./modelData/photoApp.js").models;
+//const models = require("./modelData/photoApp.js").models;
 mongoose.set("strictQuery", false);
 mongoose.connect("mongodb://127.0.0.1/project6", {
   useNewUrlParser: true,
@@ -142,8 +142,17 @@ app.get("/test/:p1", function (request, response) {
 /**
  * URL /user/list - Returns all the User objects.
  */
-app.get("/user/list", function (request, response) {
-  response.status(200).send(models.userListModel());
+app.get("/user/list", async function (request, response) {
+  try {
+    //Fetches User list from database
+    const users = await User.find({}, '_id first_name last_name').lean();
+    console.log("Fetched users:", users);
+    // Send the resulting array as JSON
+    response.status(200).json(users);
+  } catch (err) {
+    console.error('Error fetching user list:', err);
+    response.status(500).send({ message: 'Internal server error fetching user list.' });
+  }
 });
 
 /**

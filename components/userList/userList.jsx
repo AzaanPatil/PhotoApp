@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import { Divider, List, ListItem, ListItemText, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import './userList.css';
@@ -7,8 +8,19 @@ class UserList extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      users: window.models.userListModel() || [],
+      users: [],
     };
+  }
+
+  // Fetch the user list when the component mounts
+  componentDidMount() {
+    axios.get('/user/list')
+      .then((response) => {
+        this.setState({ users: response.data });
+      })
+      .catch((error) => { // Handle error appropriately
+        console.error("Error fetching user list:", error);
+      });
   }
 
   render() {
@@ -33,4 +45,3 @@ class UserList extends React.Component {
 }
 
 export default UserList;
-
