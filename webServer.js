@@ -181,18 +181,72 @@ app.get("/user/:id", async function (request, response) {
 });
 
 /**
- * URL /photosOfUser/:id - Returns the Photos for User (id).
+ * URL /photosOfUser/:id - Returns the Photos for User (id)
+ * Each photo includes comments with user details
  */
-app.get("/photosOfUser/:id", function (request, response) {
-  const id = request.params.id;
-  const photos = models.photoOfUserModel(id);
-  if (photos.length === 0) {
-    console.log("Photos for user with _id:" + id + " not found.");
-    response.status(400).send("Not found");
-    return;
+app.get("/photosOfUser/:id", async function (request, response) {
+  try {
+    const userId = request.params.id;
+
+    // First check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({
+        error: "User not found"
+      });
+      return;
+    }
+
+    // Find all photos for the user
+    const photos = await Photo.find({ user_id: userId });
+
+    // Process photos to include user details and populate comments
+    const processedPhotos = await Promise.all(photos.map(async (photo) => {
+      // Convert to plain object to modify
+      const photoObj = photo.toObject();
+
+      // Get the photo owner's details
+      const photoUser = await User.findById(photo.user_id, 'first_name last_name');
+      
+      // Process comments to include user details
+      const processedComments = await Promise.all(photo.comments.map(async (comment) => {
+        const commentUser = await User.findById(comment.user_id, 'first_name last_name');
+        return {
+          _id: comment._id,
+          comment: comment.comment,
+          date_time: comment.date_time,
+          user: {
+            _id: commentUser._id,
+            first_name: commentUser.first_name,
+            last_name: commentUser.last_name
+          }
+        };
+      }));
+
+      // Return processed photo object
+      return {
+        _id: photo._id,
+        file_name: photo.file_name,
+        date_time: photo.date_time,
+        comments: processedComments,
+        user: {
+          _id: photoUser._id,
+          first_name: photoUser.first_name,
+          last_name: photoUser.last_name
+        }
+      };
+    }));
+
+    response.status(200).json(processedPhotos);
+  } catch (err) {
+    console.error("Error processing photos:", err);
+    response.status(400).json({
+      error: "Error processing request"
+    });
   }
-  response.status(200).send(photos);
 });
+
 
 const server = app.listen(3000, function () {
   const port = server.address().port;
