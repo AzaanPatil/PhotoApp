@@ -1,4 +1,5 @@
 import React from "react";
+import axios from 'axios';
 import {
   Button,
   Card,
@@ -34,13 +35,19 @@ class UserDetail extends React.Component {
   // Fetch user data based on userId from props
  loadUser() {
   const userId = this.props.match.params.userId;
-  const userData = window.models.userModel(userId);
-  this.setState({ user: userData });
-  
-  // Update TopBar context with user's name
-  if (userData && this.props.onContextChange) {
-    this.props.onContextChange(`${userData.first_name} ${userData.last_name}`);
-  }
+  axios.get(`/user/${userId}`)
+    .then(response => {
+      const userData = response.data;
+      this.setState({ user: userData });
+      
+      // Update TopBar context with user's name
+      if (userData && this.props.onContextChange) {
+        this.props.onContextChange(`${userData.first_name} ${userData.last_name}`);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching user:', error);
+    });
 }
 
   // Render user detail view
