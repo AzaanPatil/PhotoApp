@@ -158,15 +158,26 @@ app.get("/user/list", async function (request, response) {
 /**
  * URL /user/:id - Returns the information for User (id).
  */
-app.get("/user/:id", function (request, response) {
+app.get("/user/:id", async function (request, response) {
   const id = request.params.id;
-  const user = models.userModel(id);
-  if (user === null) {
-    console.log("User with _id:" + id + " not found.");
-    response.status(400).send("Not found");
+  if(!mongoose.Types.ObjectId.isValid(id)) {
+    console.log("Invalid user id format:" + id);
+    response.status(400).send("Not found: ID is invalid");
     return;
   }
-  response.status(200).send(user);
+
+  try {
+    const user = await User.findById(id, '_id first_name last_name location description occupation').lean();
+    if (!user) {
+      console.log("User with _id:" + id + " not found.");
+      response.status(400).send("Not found");
+      return;
+    }
+    response.status(200).json(user);
+  } catch (err) {
+    console.error("Error fetching user:", err);
+    response.status(500).send({ message: "Internal server error fetching user." });
+  }
 });
 
 /**

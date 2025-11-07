@@ -14,7 +14,7 @@ class UserList extends React.Component {
 
   // Fetch the user list when the component mounts
   componentDidMount() {
-    axios.get('/user/list')
+    axios.get('/user/list') 
       .then((response) => {
         this.setState({ users: response.data });
       })
