@@ -183,16 +183,43 @@ app.get("/user/:id", async function (request, response) {
 /**
  * URL /photosOfUser/:id - Returns the Photos for User (id).
  */
-app.get("/photosOfUser/:id", function (request, response) {
+app.get("/photosOfUser/:id", async function (request, response) {
   const id = request.params.id;
-  const photos = models.photoOfUserModel(id);
-  if (photos.length === 0) {
-    console.log("Photos for user with _id:" + id + " not found.");
-    response.status(400).send("Not found");
-    return;
+
+  // Validate the ID format first
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    console.log(`Invalid user ID: ${id}`);
+    return response.status(400).send({ error: "Invalid user ID." });
   }
-  response.status(200).send(photos);
+
+  try {
+    // Check if the user actually exists
+    const user = await User.findById(id);
+    if (!user) {
+      console.log(`User with _id: ${id} not found.`);
+      return response.status(400).send({ error: "User not found." });
+    }
+
+    // Find all photos belonging to this user
+    const photos = await Photo.find({ user_id: id }).lean(); 
+
+    // Attatch comment to photo
+    for (const photo of photos) {
+      for (const comment of photo.comments) {
+        const commenter = await User.findById(comment.user_id, "_id first_name last_name").lean();
+        comment.user = commenter;
+        delete comment.user_id; // remove user_id field since frontend expects "user"
+      }
+    }
+
+    //Send photos
+    response.status(200).json(photos);
+  } catch (err) {
+    console.error("Error fetching photos:", err);
+    response.status(500).send({ error: "Server error fetching photos." });
+  }
 });
+
 
 const server = app.listen(3000, function () {
   const port = server.address().port;
