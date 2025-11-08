@@ -204,7 +204,7 @@ app.get("/photosOfUser/:id", async function (request, response) {
     // Process photos to include user details and populate comments
     const processedPhotos = await Promise.all(photos.map(async (photo) => {
       // Convert to plain object to modify
-      const photoObj = photo.toObject();
+      //const photoObj = photo.toObject();
 
       // Get the photo owner's details
       const photoUser = await User.findById(photo.user_id, 'first_name last_name');
@@ -227,6 +227,7 @@ app.get("/photosOfUser/:id", async function (request, response) {
       // Return processed photo object
       return {
         _id: photo._id,
+        user_id: photo.user_id,
         file_name: photo.file_name,
         date_time: photo.date_time,
         comments: processedComments,
