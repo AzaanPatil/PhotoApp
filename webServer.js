@@ -44,9 +44,6 @@ const User = require("./schema/user.js");
 const Photo = require("./schema/photo.js");
 const SchemaInfo = require("./schema/schemaInfo.js");
 
-// XXX - Your submission should work without this line. Comment out or delete
-// this line for tests and before submission!
-//const models = require("./modelData/photoApp.js").models;
 mongoose.set("strictQuery", false);
 mongoose.connect("mongodb://127.0.0.1/project6", {
   useNewUrlParser: true,
@@ -185,9 +182,16 @@ app.get("/user/:id", async function (request, response) {
  * Each photo includes comments with user details
  */
 app.get("/photosOfUser/:id", async function (request, response) {
+  const userId = request.params.id;
+  
+  // Validate ID format
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
   try {
-    const userId = request.params.id;
-
     // First check if user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -203,9 +207,6 @@ app.get("/photosOfUser/:id", async function (request, response) {
 
     // Process photos to include user details and populate comments
     const processedPhotos = await Promise.all(photos.map(async (photo) => {
-      // Convert to plain object to modify
-      //const photoObj = photo.toObject();
-
       // Get the photo owner's details
       const photoUser = await User.findById(photo.user_id, 'first_name last_name');
       
@@ -242,9 +243,7 @@ app.get("/photosOfUser/:id", async function (request, response) {
     response.status(200).json(processedPhotos);
   } catch (err) {
     console.error("Error processing photos:", err);
-    response.status(400).json({
-      error: "Error processing request"
-    });
+    response.status(500).send("Internal server error");
   }
 });
 
