@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import {
   AppBar, Toolbar, Typography
 } from '@mui/material';
@@ -17,15 +18,13 @@ class TopBar extends React.Component {
 
   componentDidMount() {
     // Fetch version info from the server
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', '/test/info');
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const info = JSON.parse(xhr.responseText);
-        this.setState({ version: info.__v });
-      }
-    };
-    xhr.send();
+    axios.get('/test/info')
+      .then(response => {
+        this.setState({ version: response.data.__v });
+      })
+      .catch(error => {
+        console.error('Error fetching version:', error);
+      });
   }
 
   render() {

@@ -181,42 +181,69 @@ app.get("/user/:id", async function (request, response) {
 });
 
 /**
- * URL /photosOfUser/:id - Returns the Photos for User (id).
+ * URL /photosOfUser/:id - Returns the Photos for User (id)
+ * Each photo includes comments with user details
  */
 app.get("/photosOfUser/:id", async function (request, response) {
-  const id = request.params.id;
-
-  // Validate the ID format first
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    console.log(`Invalid user ID: ${id}`);
-    return response.status(400).send({ error: "Invalid user ID." });
-  }
-
   try {
-    // Check if the user actually exists
-    const user = await User.findById(id);
+    const userId = request.params.id;
+
+    // First check if user exists
+    const user = await User.findById(userId);
     if (!user) {
-      console.log(`User with _id: ${id} not found.`);
-      return response.status(400).send({ error: "User not found." });
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({
+        error: "User not found"
+      });
+      return;
     }
 
-    // Find all photos belonging to this user
-    const photos = await Photo.find({ user_id: id }).lean(); 
+    // Find all photos for the user
+    const photos = await Photo.find({ user_id: userId });
 
-    // Attatch comment to photo
-    for (const photo of photos) {
-      for (const comment of photo.comments) {
-        const commenter = await User.findById(comment.user_id, "_id first_name last_name").lean();
-        comment.user = commenter;
-        delete comment.user_id; // remove user_id field since frontend expects "user"
-      }
-    }
+    // Process photos to include user details and populate comments
+    const processedPhotos = await Promise.all(photos.map(async (photo) => {
+      // Convert to plain object to modify
+      const photoObj = photo.toObject();
 
-    //Send photos
-    response.status(200).json(photos);
+      // Get the photo owner's details
+      const photoUser = await User.findById(photo.user_id, 'first_name last_name');
+      
+      // Process comments to include user details
+      const processedComments = await Promise.all(photo.comments.map(async (comment) => {
+        const commentUser = await User.findById(comment.user_id, 'first_name last_name');
+        return {
+          _id: comment._id,
+          comment: comment.comment,
+          date_time: comment.date_time,
+          user: {
+            _id: commentUser._id,
+            first_name: commentUser.first_name,
+            last_name: commentUser.last_name
+          }
+        };
+      }));
+
+      // Return processed photo object
+      return {
+        _id: photo._id,
+        file_name: photo.file_name,
+        date_time: photo.date_time,
+        comments: processedComments,
+        user: {
+          _id: photoUser._id,
+          first_name: photoUser.first_name,
+          last_name: photoUser.last_name
+        }
+      };
+    }));
+
+    response.status(200).json(processedPhotos);
   } catch (err) {
-    console.error("Error fetching photos:", err);
-    response.status(500).send({ error: "Server error fetching photos." });
+    console.error("Error processing photos:", err);
+    response.status(400).json({
+      error: "Error processing request"
+    });
   }
 });
 
@@ -227,6 +254,6 @@ const server = app.listen(3000, function () {
     "Listening at http://localhost:" +
       port +
       " exporting the directory " +
-      __dirname
+      __dirname 
   );
 });

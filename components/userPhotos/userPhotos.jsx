@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import { 
   Typography, 
   Card, 
@@ -62,9 +63,14 @@ class UserPhotos extends React.Component {
   }
 
   loadPhotos = () => {
-    const  userId  = this.props.match.params.userId;
-    const photos = window.models.photoOfUserModel(userId);
-    this.setState({photos});
+    const userId = this.props.match.params.userId;
+    axios.get(`/photosOfUser/${userId}`)
+      .then(response => {
+        this.setState({ photos: response.data });
+      })
+      .catch(error => {
+        console.error('Error fetching photos:', error);
+      });
   };
 
   render() {
