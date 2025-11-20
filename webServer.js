@@ -50,6 +50,9 @@ mongoose.connect("mongodb://127.0.0.1/project6", {
   useUnifiedTopology: true,
 });
 
+const bodyParser = require("body-parser");
+const multer = require("multer");
+
 // Configure express-session middleware
 app.use(session({
   secret: 'your-secret-key-change-in-production',
@@ -98,49 +101,54 @@ app.use('/test', requireAuth);
  * POST /admin/login - Authenticate user with login_name and password
  */
 app.post('/admin/login', async (request, response) => {
-  const { login_name, password } = request.body;
+  const { login_name } = request.body;
 
-  if (!login_name || !password) {
-    return response.status(400).json({ error: 'Missing login_name or password' });
+  if (!login_name) {
+    return response.status(400).json({ error: 'Missing login_name' });
   }
 
   try {
     const user = await User.findOne({ login_name: login_name.toLowerCase() });
 
-    if (!user || user.password !== password) {
-      return response.status(401).json({ error: 'Invalid login_name or password' });
+    if (!user) {
+      // NOTE: 400, not 401, per spec
+      return response.status(400).json({ error: 'Invalid login_name' });
     }
 
     // Set session
     request.session.userId = user._id;
     request.session.login_name = user.login_name;
     request.session.first_name = user.first_name;
-    request.session.last_name = user.last_name;
 
-    response.status(200).json({
-      message: 'Login successful',
+    return response.status(200).json({
       userId: user._id,
       first_name: user.first_name,
-      last_name: user.last_name,
+      last_name: user.last_name
     });
   } catch (err) {
     console.error('Error in login:', err);
-    response.status(500).json({ error: 'Internal server error' });
+    return response.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 /**
  * GET /admin/logout - Logout current user
  */
-app.get('/admin/logout', (request, response) => {
+app.post('/admin/logout', (request, response) => {
+  if (!request.session || !request.session.userId) {
+    return response.status(400).json({ error: 'No user is currently logged in' });
+  }
+
   request.session.destroy((err) => {
     if (err) {
       console.error('Error destroying session:', err);
       return response.status(500).json({ error: 'Error logging out' });
     }
-    response.status(200).json({ message: 'Logout successful' });
+    return response.status(200).json({ message: 'Logout successful' });
   });
 });
+
 
 /**
  * GET /admin/session - Get current session information

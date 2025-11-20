@@ -57,27 +57,32 @@ class PhotoShare extends React.Component {
   };
 
   handleLoginSuccess = (userData) => {
-    this.setState({
-      isLoggedIn: true,
-      userId: userData.userId,
-      firstName: userData.first_name,
-      lastName: userData.last_name,
-    });
-  };
+  this.setState({
+    isLoggedIn: true,
+    userId: userData.userId,
+    firstName: userData.first_name,
+    lastName: userData.last_name,
+  }, () => {
+    // After state updates, navigate to user detail
+    window.location.hash = `#/users/${userData.userId}`;
+  });
+};
+
 
   handleLogout = async () => {
-    try {
-      await axios.get('/admin/logout');
-      this.setState({
-        isLoggedIn: false,
-        userId: null,
-        firstName: '',
-        lastName: '',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
+  try {
+    await axios.post('/admin/logout');
+    this.setState({
+      isLoggedIn: false,
+      userId: null,
+      firstName: '',
+      lastName: '',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
+};
+
 
   // Callback function to update TopBar context
   handleContextChange = (newContext) => {

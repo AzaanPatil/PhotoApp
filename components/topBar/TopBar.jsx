@@ -37,40 +37,38 @@ class TopBar extends React.Component {
   };
 
   render() {
-    const { context, isLoggedIn, firstName, lastName } = this.props;
-    const { version } = this.state;
+   const { context, isLoggedIn, firstName } = this.props;
 
-    return (
-      <AppBar className="topbar-appBar" position="absolute">
-        <Toolbar>
-          <Typography variant="h5" color="inherit" style={{ flexGrow: 1 }}>
-            The CJ Strouds
+return (
+  <AppBar className="topbar-appBar" position="absolute">
+    <Toolbar>
+      <Typography variant="h5" color="inherit" style={{ flexGrow: 1 }}>
+        The CJ Strouds
+      </Typography>
+
+      <Typography variant="h5" color="inherit" style={{ marginRight: '20px' }}>
+        {context}
+      </Typography>
+
+      {!isLoggedIn && (
+        <Typography variant="body1" color="inherit">
+          Please login
+        </Typography>
+      )}
+
+      {isLoggedIn && (
+        <>
+          <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
+            Hi {firstName}
           </Typography>
-          {version !== '' && (
-            <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
-              Version: {version}
-            </Typography>
-          )}
-          <Typography variant="h5" color="inherit" style={{ marginRight: '20px' }}>
-            {context}
-          </Typography>
-          {isLoggedIn && (
-            <>
-              <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
-                {firstName} {lastName}
-              </Typography>
-              <Button
-                color="inherit"
-                onClick={this.handleLogout}
-                style={{ marginLeft: '10px' }}
-              >
-                Logout
-              </Button>
-            </>
-          )}
-        </Toolbar>
-      </AppBar>
-    );
+          <Button color="inherit" onClick={this.handleLogout}>
+            Log Out
+          </Button>
+        </>
+      )}
+    </Toolbar>
+  </AppBar>
+);
   }
 }
 
