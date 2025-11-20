@@ -1,7 +1,7 @@
 import React from 'react';
 import axios from 'axios';
 import {
-  AppBar, Toolbar, Typography
+  AppBar, Toolbar, Typography, Button
 } from '@mui/material';
 import './TopBar.css';
 
@@ -18,17 +18,26 @@ class TopBar extends React.Component {
 
   componentDidMount() {
     // Fetch version info from the server
-    axios.get('/test/info')
-      .then(response => {
-        this.setState({ version: response.data.__v });
-      })
-      .catch(error => {
-        console.error('Error fetching version:', error);
-      });
+    // This will fail if not logged in, which is expected
+    if (this.props.isLoggedIn) {
+      axios.get('/test/info')
+        .then(response => {
+          this.setState({ version: response.data.__v });
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+        });
+    }
   }
 
+  handleLogout = () => {
+    if (this.props.onLogout) {
+      this.props.onLogout();
+    }
+  };
+
   render() {
-    const { context } = this.props;
+    const { context, isLoggedIn, firstName, lastName } = this.props;
     const { version } = this.state;
 
     return (
@@ -37,14 +46,28 @@ class TopBar extends React.Component {
           <Typography variant="h5" color="inherit" style={{ flexGrow: 1 }}>
             The CJ Strouds
           </Typography>
-          {version !== ''&& (
+          {version !== '' && (
             <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
               Version: {version}
             </Typography>
           )}
-          <Typography variant="h5" color="inherit">
+          <Typography variant="h5" color="inherit" style={{ marginRight: '20px' }}>
             {context}
           </Typography>
+          {isLoggedIn && (
+            <>
+              <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
+                {firstName} {lastName}
+              </Typography>
+              <Button
+                color="inherit"
+                onClick={this.handleLogout}
+                style={{ marginLeft: '10px' }}
+              >
+                Logout
+              </Button>
+            </>
+          )}
         </Toolbar>
       </AppBar>
     );

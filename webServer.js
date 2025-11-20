@@ -35,8 +35,8 @@ const mongoose = require("mongoose");
 mongoose.Promise = require("bluebird");
 
 const async = require("async");
-
 const express = require("express");
+const session = require("express-session");
 const app = express();
 
 // Load the Mongoose schema for User, Photo, and SchemaInfo
@@ -50,12 +50,112 @@ mongoose.connect("mongodb://127.0.0.1/project6", {
   useUnifiedTopology: true,
 });
 
+// Configure express-session middleware
+app.use(session({
+  secret: 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    httpOnly: true,
+    secure: false, // Set to true in production with HTTPS
+    maxAge: 1000 * 60 * 60 * 24, // 24 hours
+  },
+}));
+
+// Parse JSON request bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // We have the express static module
 // (http://expressjs.com/en/starter/static-files.html) do all the work for us.
 app.use(express.static(__dirname));
 
 app.get("/", function (request, response) {
   response.send("Simple web server of files from " + __dirname);
+});
+
+/**
+ * Middleware to check if user is authenticated
+ * Allows /admin/login, /admin/logout, and /admin/session endpoints to bypass authentication
+ */
+const requireAuth = (request, response, next) => {
+  // Check if user session exists
+  if (!request.session || !request.session.userId) {
+    return response.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  next();
+};
+
+/**
+ * Apply authentication middleware to protected API routes
+ */
+app.use('/user', requireAuth);
+app.use('/photosOfUser', requireAuth);
+app.use('/test', requireAuth);
+
+/**
+ * POST /admin/login - Authenticate user with login_name and password
+ */
+app.post('/admin/login', async (request, response) => {
+  const { login_name, password } = request.body;
+
+  if (!login_name || !password) {
+    return response.status(400).json({ error: 'Missing login_name or password' });
+  }
+
+  try {
+    const user = await User.findOne({ login_name: login_name.toLowerCase() });
+
+    if (!user || user.password !== password) {
+      return response.status(401).json({ error: 'Invalid login_name or password' });
+    }
+
+    // Set session
+    request.session.userId = user._id;
+    request.session.login_name = user.login_name;
+    request.session.first_name = user.first_name;
+    request.session.last_name = user.last_name;
+
+    response.status(200).json({
+      message: 'Login successful',
+      userId: user._id,
+      first_name: user.first_name,
+      last_name: user.last_name,
+    });
+  } catch (err) {
+    console.error('Error in login:', err);
+    response.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /admin/logout - Logout current user
+ */
+app.get('/admin/logout', (request, response) => {
+  request.session.destroy((err) => {
+    if (err) {
+      console.error('Error destroying session:', err);
+      return response.status(500).json({ error: 'Error logging out' });
+    }
+    response.status(200).json({ message: 'Logout successful' });
+  });
+});
+
+/**
+ * GET /admin/session - Get current session information
+ */
+app.get('/admin/session', (request, response) => {
+  if (!request.session || !request.session.userId) {
+    return response.status(401).json({ message: 'No active session' });
+  }
+
+  response.status(200).json({
+    userId: request.session.userId,
+    login_name: request.session.login_name,
+    first_name: request.session.first_name,
+    last_name: request.session.last_name,
+  });
 });
 
 /**
