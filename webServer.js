@@ -52,6 +52,7 @@ mongoose.connect("mongodb://127.0.0.1/project6", {
 
 const bodyParser = require("body-parser");
 const multer = require("multer");
+const fs = require('fs');
 
 // Configure express-session middleware
 app.use(session({
@@ -95,7 +96,9 @@ const requireAuth = (request, response, next) => {
  */
 app.use('/photosOfUser', requireAuth);
 app.use('/user/list', requireAuth);
-app.use('/user/', requireAuth);   
+// Restrict auth to user detail route only so POST /user (registration)
+// remains accessible without authentication.
+app.use('/user/:id', requireAuth);
 app.use('/test', requireAuth);
 
 /**
@@ -405,4 +408,48 @@ const server = app.listen(3000, function () {
       " exporting the directory " +
       __dirname 
   );
+});
+
+// Ensure images directory exists
+const imagesDir = __dirname + '/images';
+if (!fs.existsSync(imagesDir)) {
+  fs.mkdirSync(imagesDir);
+}
+
+// Configure multer storage to save files in the images directory with a unique name
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, imagesDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '_';
+    cb(null, uniqueSuffix + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
+
+/**
+ * POST /photos/new - Upload a photo file and create a Photo document
+ * Expects form field 'uploadedphoto' containing the file.
+ */
+app.post('/photos/new', requireAuth, upload.single('uploadedphoto'), async (request, response) => {
+  try {
+    if (!request.file) {
+      return response.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const savedFileName = request.file.filename;
+
+    const newPhoto = new Photo({
+      file_name: savedFileName,
+      user_id: request.session.userId,
+    });
+
+    await newPhoto.save();
+
+    return response.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Error uploading photo:', err);
+    return response.status(500).json({ error: 'Internal server error' });
+  }
 });

@@ -14,6 +14,7 @@ class TopBar extends React.Component {
     this.state = {
       version: ''
     };
+    this.fileInput = React.createRef();
   }
 
   componentDidMount() {
@@ -34,6 +35,33 @@ class TopBar extends React.Component {
     if (this.props.onLogout) {
       this.props.onLogout();
     }
+  };
+
+  handleAddPhotoClick = () => {
+    if (this.fileInput && this.fileInput.current) {
+      this.fileInput.current.click();
+    }
+  };
+
+  handleFileChange = (evt) => {
+    const file = evt.target.files && evt.target.files[0];
+    if (!file) return;
+
+    const form = new FormData();
+    form.append('uploadedphoto', file, file.name);
+
+    axios.post('/photos/new', form)
+      .then((response) => {
+        if (this.props.onPhotoAdded) this.props.onPhotoAdded();
+      })
+      .catch((err) => {
+        console.error('Photo upload failed', err);
+        if (this.props.onUploadError) this.props.onUploadError(err);
+      })
+      .finally(() => {
+        // reset the input so same file can be re-selected later
+        if (this.fileInput && this.fileInput.current) this.fileInput.current.value = '';
+      });
   };
 
   render() {
@@ -61,6 +89,16 @@ return (
           <Typography variant="body1" color="inherit" style={{ marginRight: '20px' }}>
             Hi {firstName}
           </Typography>
+          <Button color="inherit" onClick={this.handleAddPhotoClick}>
+            Add Photo
+          </Button>
+          <input
+            ref={this.fileInput}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={this.handleFileChange}
+          />
           <Button color="inherit" onClick={this.handleLogout}>
             Log Out
           </Button>
