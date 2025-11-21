@@ -93,29 +93,28 @@ const requireAuth = (request, response, next) => {
 /**
  * Apply authentication middleware to protected API routes
  */
-app.use('/user', requireAuth);
 app.use('/photosOfUser', requireAuth);
+app.use('/user/list', requireAuth);
+app.use('/user/', requireAuth);   
 app.use('/test', requireAuth);
 
 /**
  * POST /admin/login - Authenticate user with login_name and password
  */
 app.post('/admin/login', async (request, response) => {
-  const { login_name } = request.body;
+  const { login_name, password } = request.body;
 
-  if (!login_name) {
-    return response.status(400).json({ error: 'Missing login_name' });
+  if (!login_name || !password) {
+    return response.status(400).json({ error: 'Missing login_name or password' });
   }
 
   try {
     const user = await User.findOne({ login_name: login_name.toLowerCase() });
 
-    if (!user) {
-      // NOTE: 400, not 401, per spec
-      return response.status(400).json({ error: 'Invalid login_name' });
+    if (!user || user.password !== password) {
+      return response.status(400).json({ error: 'Invalid login name or password' });
     }
 
-    // Set session
     request.session.userId = user._id;
     request.session.login_name = user.login_name;
     request.session.first_name = user.first_name;
@@ -125,11 +124,13 @@ app.post('/admin/login', async (request, response) => {
       first_name: user.first_name,
       last_name: user.last_name
     });
+
   } catch (err) {
     console.error('Error in login:', err);
     return response.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 /**
@@ -355,6 +356,46 @@ app.get("/photosOfUser/:id", async function (request, response) {
   }
 });
 
+app.post('/user', async (request, response) => {
+  const {
+    login_name,
+    password,
+    first_name,
+    last_name,
+    location,
+    description,
+    occupation
+  } = request.body;
+
+  if (!login_name || !password || !first_name || !last_name) {
+    return response.status(400).send({ error: 'Missing required fields' });
+  }
+
+  try {
+    const existing = await User.findOne({ login_name: login_name.toLowerCase() });
+    if (existing) {
+      return response.status(400).send({ error: 'Login name already exists' });
+    }
+
+    const newUser = new User({
+      login_name: login_name.toLowerCase(),
+      password,
+      first_name,
+      last_name,
+      location,
+      description,
+      occupation
+    });
+
+    await newUser.save();
+
+    return response.status(200).send({ success: true });
+
+  } catch (err) {
+    console.error('Error creating user:', err);
+    return response.status(400).send({ error: 'Error creating user' });
+  }
+});
 
 const server = app.listen(3000, function () {
   const port = server.address().port;
