@@ -99,7 +99,7 @@ app.use('/user/list', requireAuth);
 // Restrict auth to user detail route only so POST /user (registration)
 // remains accessible without authentication.
 app.use('/user/:id', requireAuth);
-app.use('/test', requireAuth);
+
 app.use('/commentsOfPhoto', requireAuth);
 
 /**
