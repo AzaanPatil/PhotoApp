@@ -9,10 +9,21 @@ import {
 import { Link } from 'react-router-dom';
 import './userPhotos.css';
 
-
-
 const prettyDate = (parm) => new Date(parm).toLocaleString();
-function PhotoCard({ photo }) {
+
+function PhotoCard({ photo, onAddComment }) {
+  const [commentText, setCommentText] = React.useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const trimmed = commentText.trim();
+    if (!trimmed) {
+      return; // frontend guard; server also rejects empty
+    }
+    onAddComment(photo._id, trimmed);
+    setCommentText('');
+  };
+
   return (
     <Card className="photo-card" sx={{ mb: 2 }}>
       <img
@@ -25,6 +36,8 @@ function PhotoCard({ photo }) {
           Taken: {prettyDate(photo.date_time)}
         </Typography>
         <Divider sx={{ my: 1 }} />
+        
+        {/* Existing comments */}
         <div className="comments">
           {(photo.comments || []).map((c) => (
             <div key={c._id} className="comment-row">
@@ -37,12 +50,22 @@ function PhotoCard({ photo }) {
             </div>
           ))}
         </div>
+
+        {/* New comment input (minimal UI) */}
+        <form onSubmit={handleSubmit} style={{ marginTop: 8 }}>
+          <input
+            type="text"
+            value={commentText}
+            placeholder="Add a comment..."
+            onChange={(e) => setCommentText(e.target.value)}
+            style={{ width: '70%', marginRight: 8, padding: 4 }}
+          />
+          <button type="submit">Post</button>
+        </form>
       </CardContent>
     </Card>
   );
 }
-
-
 
 class UserPhotos extends React.Component {
   constructor(props) {
@@ -73,13 +96,29 @@ class UserPhotos extends React.Component {
       });
   };
 
+  // NEW: send comment to server, then reload photos
+  addComment = (photoId, commentText) => {
+    axios.post(`/commentsOfPhoto/${photoId}`, { comment: commentText })
+      .then(() => {
+        // After successful post, refresh photos so new comment shows up
+        this.loadPhotos();
+      })
+      .catch(error => {
+        console.error('Error adding comment:', error);
+      });
+  };
+
   render() {
-    const {photos} = this.state;
-    if(!photos) return <p>Loading photos...</p>;
+    const { photos } = this.state;
+    if (!photos) return <p>Loading photos...</p>;
     return (
       <div className="photos">
         {photos.map((p) => (
-          <PhotoCard key={p._id} photo={p} />
+          <PhotoCard 
+            key={p._id} 
+            photo={p} 
+            onAddComment={this.addComment}
+          />
         ))}
         {photos.length === 0 && (
           <Typography variant="body2">No photos for this user</Typography>

@@ -100,6 +100,7 @@ app.use('/user/list', requireAuth);
 // remains accessible without authentication.
 app.use('/user/:id', requireAuth);
 app.use('/test', requireAuth);
+app.use('/commentsOfPhoto', requireAuth);
 
 /**
  * POST /admin/login - Authenticate user with login_name and password
@@ -451,5 +452,48 @@ app.post('/photos/new', requireAuth, upload.single('uploadedphoto'), async (requ
   } catch (err) {
     console.error('Error uploading photo:', err);
     return response.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+app.post('/commentsOfPhoto/:photo_id', async (request, response) => {
+  const photoId = request.params.photo_id;
+  const text = (request.body.comment || '').trim();
+
+  // 1. Reject empty comments
+  if (!text) {
+    return response.status(400).send('Empty comment not allowed');
+  }
+
+  // 2. Validate photo id
+  if (!mongoose.Types.ObjectId.isValid(photoId)) {
+    return response.status(400).send('Invalid photo id');
+  }
+
+  try {
+    // 3. Find the photo
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(400).send('Photo not found');
+    }
+
+    // 4. Build the new comment (user comes from the session)
+    const newComment = {
+      comment: text,
+      date_time: new Date(),
+      user_id: request.session.userId   // <-- THIS ties it to the logged-in user
+    };
+
+    // 5. Add and save
+    photo.comments.push(newComment);
+    await photo.save();
+
+    // Simplest: just return success or the new comment
+    return response.status(200).json({ success: true });
+    // or: response.status(200).json(newComment);
+  } catch (err) {
+    console.error('Error adding comment:', err);
+    return response.status(500).send('Internal server error');
   }
 });
