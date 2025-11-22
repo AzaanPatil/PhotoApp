@@ -11,24 +11,7 @@ import './TopBar.css';
 class TopBar extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {
-      version: ''
-    };
     this.fileInput = React.createRef();
-  }
-
-  componentDidMount() {
-    // Fetch version info from the server
-    // This will fail if not logged in, which is expected
-    if (this.props.isLoggedIn) {
-      axios.get('/test/info')
-        .then(response => {
-          this.setState({ version: response.data.__v });
-        })
-        .catch(error => {
-          console.error('Error fetching version:', error);
-        });
-    }
   }
 
   handleLogout = () => {
@@ -51,7 +34,7 @@ class TopBar extends React.Component {
     form.append('uploadedphoto', file, file.name);
 
     axios.post('/photos/new', form)
-      .then((response) => {
+      .then(() => {
         if (this.props.onPhotoAdded) this.props.onPhotoAdded();
       })
       .catch((err) => {

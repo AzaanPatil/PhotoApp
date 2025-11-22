@@ -37,6 +37,9 @@ mongoose.Promise = require("bluebird");
 const async = require("async");
 const express = require("express");
 const session = require("express-session");
+const multer = require("multer");
+const fs = require('fs');
+
 const app = express();
 
 const User = require("./schema/user.js");
@@ -48,10 +51,6 @@ mongoose.connect("mongodb://127.0.0.1/project6", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-
-const bodyParser = require("body-parser");
-const multer = require("multer");
-const fs = require('fs');
 
 app.use(session({
   secret: 'your-secret-key-change-in-production',
@@ -78,7 +77,7 @@ const requireAuth = (request, response, next) => {
     return response.status(401).json({ error: 'Unauthorized' });
   }
   
-  next();
+  return next();
 };
 
 app.use('/photosOfUser', requireAuth);
@@ -120,7 +119,7 @@ app.post('/admin/logout', (request, response) => {
     return response.status(400).json({ error: 'No user is currently logged in' });
   }
 
-  request.session.destroy((err) => {
+  return request.session.destroy((err) => {
     if (err) {
       console.error('Error destroying session:', err);
       return response.status(500).json({ error: 'Error logging out' });
@@ -134,7 +133,7 @@ app.get('/admin/session', (request, response) => {
     return response.status(401).json({ message: 'No active session' });
   }
 
-  response.status(200).json({
+  return response.status(200).json({
     userId: request.session.userId,
     login_name: request.session.login_name,
     first_name: request.session.first_name,
