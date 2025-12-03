@@ -476,4 +476,130 @@ describe("Photo App: Server API Tests", function () {
       );
     });
   });
+  describe("test /user/:id/usage/recent-photo and /user/:id/usage/most-commented", function () {
+    let userList;
+    const Users = models.userListModel();
+
+    it("can get the list of user", function (done) {
+      http.get(
+        {
+          hostname: host,
+          port: port,
+          path: "/user/list",
+          headers: { Cookie: authCookie },
+        },
+        function (response) {
+          let responseBody = "";
+          response.on("data", function (chunk) {
+            responseBody += chunk;
+          });
+          response.on("end", function () {
+            assert.strictEqual(response.statusCode, 200);
+            userList = JSON.parse(responseBody);
+            done();
+          });
+        }
+      );
+    });
+
+    it("returns correct recent photo and most commented photo for each user", function (done) {
+      async.each(
+        Users,
+        function (realUser, callback) {
+          const user = _.find(userList, {
+            first_name: realUser.first_name,
+            last_name: realUser.last_name,
+          });
+          assert(user, "could not find user " + realUser.first_name + " " + realUser.last_name);
+          const id = user._id;
+          // Get recent photo
+          http.get(
+            {
+              hostname: host,
+              port: port,
+              path: `/user/${id}/usage/recent-photo`,
+              headers: { Cookie: authCookie },
+            },
+            function (response) {
+              let responseBody = "";
+              response.on("data", function (chunk) {
+                responseBody += chunk;
+              });
+              response.on("end", function () {
+                assert.strictEqual(response.statusCode, 200);
+                const result = JSON.parse(responseBody);
+                // If user has no photos, photo should be null
+                const realPhotos = models.photoOfUserModel(realUser._id);
+                if (realPhotos.length === 0) {
+                  assert.strictEqual(result.photo, null);
+                } else {
+                  // Most recent photo is the one with max date_time
+                  const sorted = _.sortBy(realPhotos, p => -new Date(p.date_time).valueOf());
+                  assert(result.photo, "recent photo missing");
+                  assert.strictEqual(result.photo.file_name, sorted[0].file_name);
+                  assertEqualDates(result.photo.date_time, sorted[0].date_time);
+                }
+                // Now test most commented
+                http.get(
+                  {
+                    hostname: host,
+                    port: port,
+                    path: `/user/${id}/usage/most-commented`,
+                    headers: { Cookie: authCookie },
+                  },
+                  function (response2) {
+                    let responseBody2 = "";
+                    response2.on("data", function (chunk) {
+                      responseBody2 += chunk;
+                    });
+                    response2.on("end", function () {
+                      assert.strictEqual(response2.statusCode, 200);
+                      const result2 = JSON.parse(responseBody2);
+                      if (realPhotos.length === 0) {
+                        assert.strictEqual(result2.photo, null);
+                      } else {
+                        // Most commented photo is the one with max comments.length
+                        const sorted2 = _.sortBy(realPhotos, p => -((p.comments || []).length));
+                        assert(result2.photo, "most commented photo missing");
+                        assert.strictEqual(result2.photo.file_name, sorted2[0].file_name);
+                        assert.strictEqual(result2.photo.commentCount, (sorted2[0].comments || []).length);
+                      }
+                      callback();
+                    });
+                  }
+                );
+              });
+            }
+          );
+        },
+        done
+      );
+    });
+
+    it("returns 400 for invalid user id format", function (done) {
+      http.get(
+        {
+          hostname: host,
+          port: port,
+          path: "/user/1/usage/recent-photo",
+          headers: { Cookie: authCookie },
+        },
+        function (response) {
+          assert.strictEqual(response.statusCode, 400);
+          http.get(
+            {
+              hostname: host,
+              port: port,
+              path: "/user/1/usage/most-commented",
+              headers: { Cookie: authCookie },
+            },
+            function (response2) {
+              assert.strictEqual(response2.statusCode, 400);
+              done();
+            }
+          );
+        }
+      );
+    });
+  });
 });

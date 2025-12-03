@@ -277,6 +277,93 @@ app.get("/photosOfUser/:id", async function (request, response) {
   }
 });
 
+app.get("/user/:id/usage/recent-photo", requireAuth, async function (request, response) {
+  const userId = request.params.id;
+  
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({ error: "User not found" });
+      return;
+    }
+
+    // Find all photos for the user and sort by date_time descending
+    const photos = await Photo.find({ user_id: userId }).sort({ date_time: -1 }).limit(1);
+
+    if (photos.length === 0) {
+      return response.status(200).json({ photo: null });
+    }
+
+    const recentPhoto = photos[0];
+    response.status(200).json({
+      photo: {
+        _id: recentPhoto._id,
+        file_name: recentPhoto.file_name,
+        date_time: recentPhoto.date_time
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching recent photo:", err);
+    response.status(500).send("Internal server error");
+  }
+});
+
+app.get("/user/:id/usage/most-commented", requireAuth, async function (request, response) {
+  const userId = request.params.id;
+  
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({ error: "User not found" });
+      return;
+    }
+
+    // Find all photos for the user
+    const photos = await Photo.find({ user_id: userId });
+
+    if (photos.length === 0) {
+      return response.status(200).json({ photo: null });
+    }
+
+    // Find the photo with the most comments
+    let mostCommentedPhoto = photos[0];
+    let maxComments = (mostCommentedPhoto.comments || []).length;
+
+    for (let i = 1; i < photos.length; i++) {
+      const commentCount = (photos[i].comments || []).length;
+      if (commentCount > maxComments) {
+        maxComments = commentCount;
+        mostCommentedPhoto = photos[i];
+      }
+    }
+
+    response.status(200).json({
+      photo: {
+        _id: mostCommentedPhoto._id,
+        file_name: mostCommentedPhoto.file_name,
+        commentCount: maxComments
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching most commented photo:", err);
+    response.status(500).send("Internal server error");
+  }
+});
+
 app.post('/user', async (request, response) => {
   const {
     login_name,
