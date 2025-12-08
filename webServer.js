@@ -37,6 +37,9 @@ mongoose.Promise = require("bluebird");
 const async = require("async");
 const express = require("express");
 const session = require("express-session");
+const multer = require("multer");
+const fs = require('fs');
+
 const app = express();
 
 const User = require("./schema/user.js");
@@ -48,10 +51,6 @@ mongoose.connect("mongodb://127.0.0.1/project6", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-
-const bodyParser = require("body-parser");
-const multer = require("multer");
-const fs = require('fs');
 
 app.use(session({
   secret: 'your-secret-key-change-in-production',
@@ -78,7 +77,7 @@ const requireAuth = (request, response, next) => {
     return response.status(401).json({ error: 'Unauthorized' });
   }
   
-  next();
+  return next();
 };
 
 app.use('/photosOfUser', requireAuth);
@@ -119,7 +118,7 @@ app.post('/admin/logout', (request, response) => {
     return response.status(400).json({ error: 'No user is currently logged in' });
   }
 
-  request.session.destroy((err) => {
+  return request.session.destroy((err) => {
     if (err) {
       console.error('Error destroying session:', err);
       return response.status(500).json({ error: 'Error logging out' });
@@ -133,7 +132,7 @@ app.get('/admin/session', (request, response) => {
     return response.status(401).json({ message: 'No active session' });
   }
 
-  response.status(200).json({
+  return response.status(200).json({
     userId: request.session.userId,
     login_name: request.session.login_name,
     first_name: request.session.first_name,
@@ -273,6 +272,93 @@ app.get("/photosOfUser/:id", async function (request, response) {
     response.status(200).json(processedPhotos);
   } catch (err) {
     console.error("Error processing photos:", err);
+    response.status(500).send("Internal server error");
+  }
+});
+
+app.get("/user/:id/usage/recent-photo", requireAuth, async function (request, response) {
+  const userId = request.params.id;
+  
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({ error: "User not found" });
+      return;
+    }
+
+    // Find all photos for the user and sort by date_time descending
+    const photos = await Photo.find({ user_id: userId }).sort({ date_time: -1 }).limit(1);
+
+    if (photos.length === 0) {
+      return response.status(200).json({ photo: null });
+    }
+
+    const recentPhoto = photos[0];
+    response.status(200).json({
+      photo: {
+        _id: recentPhoto._id,
+        file_name: recentPhoto.file_name,
+        date_time: recentPhoto.date_time
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching recent photo:", err);
+    response.status(500).send("Internal server error");
+  }
+});
+
+app.get("/user/:id/usage/most-commented", requireAuth, async function (request, response) {
+  const userId = request.params.id;
+  
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({ error: "User not found" });
+      return;
+    }
+
+    // Find all photos for the user
+    const photos = await Photo.find({ user_id: userId });
+
+    if (photos.length === 0) {
+      return response.status(200).json({ photo: null });
+    }
+
+    // Find the photo with the most comments
+    let mostCommentedPhoto = photos[0];
+    let maxComments = (mostCommentedPhoto.comments || []).length;
+
+    for (let i = 1; i < photos.length; i++) {
+      const commentCount = (photos[i].comments || []).length;
+      if (commentCount > maxComments) {
+        maxComments = commentCount;
+        mostCommentedPhoto = photos[i];
+      }
+    }
+
+    response.status(200).json({
+      photo: {
+        _id: mostCommentedPhoto._id,
+        file_name: mostCommentedPhoto.file_name,
+        commentCount: maxComments
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching most commented photo:", err);
     response.status(500).send("Internal server error");
   }
 });

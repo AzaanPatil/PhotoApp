@@ -11,7 +11,7 @@ import './userPhotos.css';
 
 const prettyDate = (parm) => new Date(parm).toLocaleString();
 
-function PhotoCard({ photo, onAddComment }) {
+function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
   const [commentText, setCommentText] = React.useState('');
 
   const handleSubmit = (e) => {
@@ -25,7 +25,11 @@ function PhotoCard({ photo, onAddComment }) {
   };
 
   return (
-    <Card className="photo-card" sx={{ mb: 2 }}>
+    <Card 
+      className={`photo-card ${isHighlighted ? 'highlighted' : ''}`}
+      ref={photoRef}
+      sx={{ mb: 2 }}
+    >
       <img
         className="photo-img"
         src={`/images/${photo.file_name}`}
@@ -71,17 +75,42 @@ class UserPhotos extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      photos: []
+      photos: [],
+      highlightedPhotoId: null
     };
+    this.photoRefs = {};
   }
   
   componentDidMount() {
     this.loadPhotos();
+    this.checkForHighlightedPhoto();
   }
 
   componentDidUpdate(prevProps) {
     if (prevProps.match.params.userId !== this.props.match.params.userId) {
       this.loadPhotos();
+      this.checkForHighlightedPhoto();
+    }
+  }
+
+  checkForHighlightedPhoto() {
+    // Get the photoId from URL query params
+    const params = new URLSearchParams(this.props.location.search);
+    const photoId = params.get('photoId');
+    
+    if (photoId) {
+      this.setState({ highlightedPhotoId: photoId });
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        this.scrollToPhoto(photoId);
+      }, 100);
+    }
+  }
+
+  scrollToPhoto(photoId) {
+    const ref = this.photoRefs[photoId];
+    if (ref) {
+      ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
@@ -90,6 +119,10 @@ class UserPhotos extends React.Component {
     axios.get(`/photosOfUser/${userId}`)
       .then(response => {
         this.setState({ photos: response.data });
+        // After photos are loaded, check if we need to highlight and scroll
+        setTimeout(() => {
+          this.checkForHighlightedPhoto();
+        }, 50);
       })
       .catch(error => {
         console.error('Error fetching photos:', error);
@@ -109,7 +142,7 @@ class UserPhotos extends React.Component {
   };
 
   render() {
-    const { photos } = this.state;
+    const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
     return (
       <div className="photos">
@@ -118,6 +151,8 @@ class UserPhotos extends React.Component {
             key={p._id} 
             photo={p} 
             onAddComment={this.addComment}
+            isHighlighted={highlightedPhotoId === p._id}
+            photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}
           />
         ))}
         {photos.length === 0 && (
