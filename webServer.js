@@ -82,7 +82,6 @@ const requireAuth = (request, response, next) => {
 };
 
 app.use('/photosOfUser', requireAuth);
-app.use('/user/list', requireAuth);
 app.use('/user/:id', requireAuth);
 
 app.post('/admin/login', async (request, response) => {
