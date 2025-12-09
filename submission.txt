@@ -1,1 +1,1 @@
-
+For sprint 4, we implemented was the "Extend user profile detail with usage." It was worth 3 points. Meaning we completed a total of 3 points worth of user stories. 
