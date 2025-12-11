@@ -62,12 +62,14 @@ describe("Photo App: Server API Tests", function () {
         },
       };
 
+      // Make an HTTP request and collect the response body
       const request = http.request(options, function (response) {
         let responseBody = "";
         response.on("data", function (chunk) {
           responseBody += chunk;
         });
 
+        // When the response finishes, verify status, capture session cookie, and finish the test
         response.on("end", function () {
           assert.strictEqual(
             response.statusCode,
