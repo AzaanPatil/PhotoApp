@@ -39,6 +39,8 @@ const photoSchema = new mongoose.Schema({
   // Array of user IDs who can view this photo. If null/undefined, photo is public.
   // If empty array, only owner can view. If populated, owner + listed users can view.
   sharing_list: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // Array of user IDs who have liked this photo.
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 });
 
 /**

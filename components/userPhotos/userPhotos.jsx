@@ -50,7 +50,7 @@ const renderCommentWithMentions = (commentText, mentions, users) => {
   return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
-function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete }) {
+function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete, onLikeToggle }) {
   const [commentText, setCommentText] = React.useState('');
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [suggestions, setSuggestions] = React.useState([]);
@@ -176,6 +176,30 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId
             )}
           </Typography>
         )}
+        
+        {/* Like button and count */}
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            onClick={() => onLikeToggle(photo._id)}
+            style={{ 
+              backgroundColor: (photo.likes || []).includes(currentUserId) ? '#1976d2' : '#e0e0e0',
+              color: (photo.likes || []).includes(currentUserId) ? 'white' : 'black',
+              border: 'none', 
+              borderRadius: 4, 
+              padding: '4px 8px', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            {(photo.likes || []).includes(currentUserId) ? '❤️' : '🤍'} 
+            {(photo.likes || []).includes(currentUserId) ? 'Unlike' : 'Like'}
+          </button>
+          <Typography variant="body2" color="textSecondary">
+            {(photo.likes || []).length} like{(photo.likes || []).length !== 1 ? 's' : ''}
+          </Typography>
+        </div>
         
         <Divider sx={{ my: 1 }} />
         
@@ -345,6 +369,40 @@ class UserPhotos extends React.Component {
     }
   };
 
+  // NEW: toggle like on photo
+  toggleLike = (photoId) => {
+    // Find the photo to check if user has liked it
+    const photo = this.state.photos.find(p => p._id === photoId);
+    if (!photo) return;
+
+    const isLiked = (photo.likes || []).includes(this.props.currentUserId);
+    const endpoint = isLiked ? 'delete' : 'post';
+    const url = `/photos/${photoId}/like`;
+
+    axios[endpoint](url)
+      .then(response => {
+        // Update the photo's likes in state immediately for instant UI feedback
+        this.setState(prevState => ({
+          photos: prevState.photos.map(p => 
+            p._id === photoId 
+              ? { 
+                  ...p, 
+                  likes: isLiked 
+                    ? (p.likes || []).filter(id => id !== this.props.currentUserId)
+                    : [...(p.likes || []), this.props.currentUserId]
+                }
+              : p
+          )
+        }));
+      })
+      .catch(error => {
+        console.error('Error toggling like:', error);
+        alert('Failed to update like. Please try again.');
+        // Reload photos to revert any optimistic updates
+        this.loadPhotos();
+      });
+  };
+
   render() {
     const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
@@ -357,6 +415,7 @@ class UserPhotos extends React.Component {
             onAddComment={this.addComment}
             onPhotoDelete={this.deletePhoto}
             onCommentDelete={this.deleteComment}
+            onLikeToggle={this.toggleLike}
             currentUserId={this.props.currentUserId}
             isHighlighted={highlightedPhotoId === p._id}
             photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}

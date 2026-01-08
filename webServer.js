@@ -339,9 +339,19 @@ app.get("/photosOfUser/:id", async function (request, response) {
         file_name: photo.file_name,
         date_time: photo.date_time,
         comments: processedComments,
-        sharing_list: photo.sharing_list // Include sharing info for frontend display
+        sharing_list: photo.sharing_list, // Include sharing info for frontend display
+        likes: photo.likes || [], // Include likes array
+        likeCount: (photo.likes || []).length // Include like count for sorting
       };
     }));
+
+    // Sort photos: first by like count descending, then by date_time descending
+    processedPhotos.sort((a, b) => {
+      if (a.likeCount !== b.likeCount) {
+        return b.likeCount - a.likeCount; // Higher likes first
+      }
+      return new Date(b.date_time) - new Date(a.date_time); // More recent first
+    });
 
     response.status(200).json(processedPhotos);
   } catch (err) {
@@ -702,6 +712,127 @@ app.post('/photos/:photo_id/comments', requireAuth, async (request, response) =>
   }
 });
 
+// LIKE/UNLIKE ENDPOINTS
+// =====================
+
+/**
+ * POST /photos/:photo_id/like
+ * Like a photo
+ * 
+ * Request: POST /photos/:photo_id/like
+ * Response: { success: true, liked: true, likeCount: number }
+ * 
+ * Security: Requires authentication, validates photo exists and user can view it
+ */
+app.post('/photos/:photo_id/like', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const currentUserId = request.session.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Check if user can view this photo
+    if (!canUserViewPhoto(photo, currentUserId)) {
+      return response.status(403).json({ error: 'You do not have permission to view this photo' });
+    }
+
+    // Check if user already liked this photo
+    const userLikedIndex = photo.likes ? photo.likes.findIndex(id => id.equals(currentUserId)) : -1;
+    if (userLikedIndex !== -1) {
+      return response.status(400).json({ error: 'You have already liked this photo' });
+    }
+
+    // Validate that likes won't exceed total number of users
+    const totalUsers = await User.countDocuments();
+    const currentLikeCount = (photo.likes || []).length;
+    if (currentLikeCount >= totalUsers) {
+      return response.status(400).json({ error: 'Cannot like photo - maximum likes reached' });
+    }
+
+    // Add like
+    if (!photo.likes) {
+      photo.likes = [];
+    }
+    photo.likes.push(currentUserId);
+    await photo.save();
+
+    // Log like activity
+    const likeActivity = new Activity({
+      activity_type: 'photo_liked',
+      user_id: currentUserId,
+      activity_data: {
+        photo_id: photoId
+      }
+    });
+    await likeActivity.save();
+
+    return response.status(200).json({ 
+      success: true, 
+      liked: true, 
+      likeCount: photo.likes.length 
+    });
+  } catch (err) {
+    console.error('Error liking photo:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /photos/:photo_id/like
+ * Unlike a photo
+ * 
+ * Request: DELETE /photos/:photo_id/like
+ * Response: { success: true, liked: false, likeCount: number }
+ * 
+ * Security: Requires authentication, validates photo exists and user can view it
+ */
+app.delete('/photos/:photo_id/like', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const currentUserId = request.session.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Check if user can view this photo
+    if (!canUserViewPhoto(photo, currentUserId)) {
+      return response.status(403).json({ error: 'You do not have permission to view this photo' });
+    }
+
+    // Check if user has liked this photo
+    const userLikedIndex = photo.likes ? photo.likes.findIndex(id => id.equals(currentUserId)) : -1;
+    if (userLikedIndex === -1) {
+      return response.status(400).json({ error: 'You have not liked this photo' });
+    }
+
+    // Remove like
+    photo.likes.splice(userLikedIndex, 1);
+    await photo.save();
+
+    return response.status(200).json({ 
+      success: true, 
+      liked: false, 
+      likeCount: photo.likes.length 
+    });
+  } catch (err) {
+    console.error('Error unliking photo:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
 // PHOTO SHARING ENDPOINTS
 // =======================
 
@@ -1024,10 +1155,16 @@ app.delete('/user/:id', requireAuth, async (request, response) => {
         { $pull: { comments: { user_id: userId } } }
       ).session(session);
 
-      // 3. Delete all activities related to this user
+      // 3. Remove this user's likes from all photos
+      await Photo.updateMany(
+        { likes: userId },
+        { $pull: { likes: userId } }
+      ).session(session);
+
+      // 4. Delete all activities related to this user
       await Activity.deleteMany({ user_id: userId }).session(session);
 
-      // 4. Delete the user account
+      // 5. Delete the user account
       await User.findByIdAndDelete(userId).session(session);
 
       // Commit the transaction

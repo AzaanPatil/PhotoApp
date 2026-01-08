@@ -11,7 +11,7 @@ const activitySchema = new mongoose.Schema({
   activity_type: {
     type: String,
     required: true,
-    enum: ['photo_upload', 'comment_added', 'user_register', 'user_login', 'user_logout']
+    enum: ['photo_upload', 'comment_added', 'user_register', 'user_login', 'user_logout', 'photo_liked']
   },
   // The date and time when the activity occurred
   date_time: { type: Date, default: Date.now },
