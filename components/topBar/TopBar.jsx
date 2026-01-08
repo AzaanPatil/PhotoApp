@@ -1,5 +1,6 @@
 import React from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, Dialog, DialogTitle, DialogContent,
   DialogActions, FormControl, InputLabel, Select, MenuItem, Chip,
@@ -209,6 +210,9 @@ class TopBar extends React.Component {
                 </Typography>
                 <Button color="inherit" onClick={this.handleAddPhotoClick}>
                   Add Photo
+                </Button>
+                <Button color="inherit" component={Link} to="/activities">
+                  Activities
                 </Button>
                 <input
                   ref={this.fileInput}

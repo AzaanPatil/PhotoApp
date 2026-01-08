@@ -15,6 +15,7 @@ import UserDetail from './components/userDetail/userDetail';
 import UserList from './components/userList/userList';
 import UserPhotos from './components/userPhotos/userPhotos';
 import LoginRegister from './components/loginRegister/LoginRegister';
+import Activities from './components/activities/Activities';
 
 class PhotoShare extends React.Component {
   constructor(props) {
@@ -146,6 +147,7 @@ class PhotoShare extends React.Component {
                   <Route path="/photos/:userId"
                     render={props => <UserPhotos {...props} onContextChange={this.handleContextChange} />}
                   />
+                  <Route path="/activities" component={Activities} />
                   <Route path="/users" component={UserList} />
                 </Switch>
               </Paper>

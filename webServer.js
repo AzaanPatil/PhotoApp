@@ -77,6 +77,7 @@ const app = express();
 const User = require("./schema/user.js");
 const Photo = require("./schema/photo.js");
 const SchemaInfo = require("./schema/schemaInfo.js");
+const Activity = require("./schema/activity.js");
 
 mongoose.set("strictQuery", false);
 mongoose.connect("mongodb://127.0.0.1/project6", {
@@ -141,6 +142,14 @@ app.post('/admin/login', async (request, response) => {
     request.session.login_name = user.login_name;
     request.session.first_name = user.first_name;
 
+    // Log user login activity
+    const loginActivity = new Activity({
+      activity_type: 'user_login',
+      user_id: user._id,
+      activity_data: {}
+    });
+    await loginActivity.save();
+
     return response.status(200).json({
       _id: user._id,
       first_name: user.first_name,
@@ -153,16 +162,32 @@ app.post('/admin/login', async (request, response) => {
   }
 });
 
-app.post('/admin/logout', (request, response) => {
+app.post('/admin/logout', async (request, response) => {
   if (!request.session || !request.session.userId) {
     return response.status(400).json({ error: 'No user is currently logged in' });
   }
 
-  return request.session.destroy((err) => {
+  const userId = request.session.userId;
+
+  return request.session.destroy(async (err) => {
     if (err) {
       console.error('Error destroying session:', err);
       return response.status(500).json({ error: 'Error logging out' });
     }
+
+    // Log user logout activity
+    try {
+      const logoutActivity = new Activity({
+        activity_type: 'user_logout',
+        user_id: userId,
+        activity_data: {}
+      });
+      await logoutActivity.save();
+    } catch (activityErr) {
+      console.error('Error logging logout activity:', activityErr);
+      // Don't fail the logout if activity logging fails
+    }
+
     return response.status(200).json({ message: 'Logout successful' });
   });
 });
@@ -205,6 +230,7 @@ app.get("/test/:p1", function (request, response) {
       { name: "user", collection: User },
       { name: "photo", collection: Photo },
       { name: "schemaInfo", collection: SchemaInfo },
+      { name: "activity", collection: Activity },
     ];
     async.each(
       collections,
@@ -465,6 +491,14 @@ app.post('/user', async (request, response) => {
 
     await newUser.save();
 
+    // Log user registration activity
+    const registerActivity = new Activity({
+      activity_type: 'user_register',
+      user_id: newUser._id,
+      activity_data: {}
+    });
+    await registerActivity.save();
+
     return response.status(200).json({
       login_name: newUser.login_name,
       _id: newUser._id
@@ -648,6 +682,18 @@ app.post('/photos/:photo_id/comments', requireAuth, async (request, response) =>
     photo.comments.push(newComment);
     await photo.save();
 
+    // Log comment added activity
+    const commentActivity = new Activity({
+      activity_type: 'comment_added',
+      user_id: currentUserId,
+      activity_data: {
+        photo_id: photoId,
+        comment_id: newComment._id,
+        comment_text: text
+      }
+    });
+    await commentActivity.save();
+
     return response.status(200).json({ success: true });
   } catch (err) {
     console.error('Error adding comment:', err);
@@ -716,6 +762,17 @@ app.post('/photos/new', requireAuth, upload.single('uploadedphoto'), async (requ
 
     await newPhoto.save();
 
+    // Log photo upload activity
+    const uploadActivity = new Activity({
+      activity_type: 'photo_upload',
+      user_id: request.session.userId,
+      activity_data: {
+        photo_id: newPhoto._id,
+        file_name: savedFileName
+      }
+    });
+    await uploadActivity.save();
+
     return response.status(200).json({ success: true });
   } catch (err) {
     console.error('Error uploading photo:', err);
@@ -755,6 +812,73 @@ function canUserViewPhoto(photo, userId) {
   return photo.sharing_list.some(sharedUserId => sharedUserId.toString() === userId?.toString());
 }
 
+/**
+ * GET /activities
+ * Returns the 5 most recent activities from the site
+ * Activities include photo uploads, comments, user registrations, logins, and logouts
+ * Results are sorted by date_time in descending order (most recent first)
+ */
+app.get('/activities', async (request, response) => {
+  try {
+    // Fetch the 5 most recent activities with user information
+    const activities = await Activity.find({})
+      .sort({ date_time: -1 })
+      .limit(5)
+      .populate('user_id', 'first_name last_name')
+      .lean();
+
+    // Process activities to include additional data for display
+    const processedActivities = await Promise.all(activities.map(async (activity) => {
+      const processedActivity = {
+        _id: activity._id,
+        activity_type: activity.activity_type,
+        date_time: activity.date_time,
+        user: {
+          _id: activity.user_id._id,
+          first_name: activity.user_id.first_name,
+          last_name: activity.user_id.last_name
+        }
+      };
+
+      // Add activity-specific data
+      if (activity.activity_type === 'photo_upload' && activity.activity_data.photo_id) {
+        // For photo uploads, include the photo information
+        try {
+          const photo = await Photo.findById(activity.activity_data.photo_id, 'file_name').lean();
+          if (photo) {
+            processedActivity.photo = {
+              _id: activity.activity_data.photo_id,
+              file_name: photo.file_name
+            };
+          }
+        } catch (err) {
+          console.error('Error fetching photo for activity:', err);
+        }
+      } else if (activity.activity_type === 'comment_added' && activity.activity_data.photo_id) {
+        // For comments, include the photo information
+        try {
+          const photo = await Photo.findById(activity.activity_data.photo_id, 'file_name').lean();
+          if (photo) {
+            processedActivity.photo = {
+              _id: activity.activity_data.photo_id,
+              file_name: photo.file_name
+            };
+            processedActivity.comment_text = activity.activity_data.comment_text;
+          }
+        } catch (err) {
+          console.error('Error fetching photo for comment activity:', err);
+        }
+      }
+
+      return processedActivity;
+    }));
+
+    response.status(200).json(processedActivities);
+  } catch (err) {
+    console.error('Error fetching activities:', err);
+    response.status(500).send('Internal server error');
+  }
+});
 
 // SERVER STARTUP
 // ===============
