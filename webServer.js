@@ -63,6 +63,10 @@ app.use(session({
   },
 }));
 
+// Express-session is used to create server-side sessions. The session
+// is required for protecting API endpoints so only authenticated users
+// (users who have logged in) can access sensitive data.
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -79,6 +83,10 @@ const requireAuth = (request, response, next) => {
   
   return next();
 };
+
+// Middleware `requireAuth` ensures that routes that use it reject requests
+// from unauthenticated clients with HTTP 401. This is applied to most
+// API routes below to protect user/photo data.
 
 app.use('/photosOfUser', requireAuth);
 app.use('/user/:id', requireAuth);
@@ -314,6 +322,12 @@ app.get("/user/:id/usage/recent-photo", requireAuth, async function (request, re
   }
 });
 
+// GET /user/:id/usage/recent-photo
+// Returns the single most recently uploaded photo for the user identified
+// by `userId`. The server validates the id, ensures the user exists and
+// then performs a query sorted by `date_time` (descending) to pick the
+// latest photo. If the user has no photos, the API returns `{ photo: null }`.
+
 app.get("/user/:id/usage/most-commented", requireAuth, async function (request, response) {
   const userId = request.params.id;
   
@@ -362,6 +376,14 @@ app.get("/user/:id/usage/most-commented", requireAuth, async function (request, 
     response.status(500).send("Internal server error");
   }
 });
+
+// GET /user/:id/usage/most-commented
+// Returns the user's photo that has the largest number of comments. The
+// server fetches all photos for the user and performs the comments-length
+// comparison on the backend. This guarantees consistent behavior and keeps
+// the client simple. If there are no photos the endpoint returns
+// `{ photo: null }`. If photos exist but have no comments, `commentCount`
+// will be `0`.
 
 app.post('/user', async (request, response) => {
   const {

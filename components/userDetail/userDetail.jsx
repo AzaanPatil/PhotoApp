@@ -78,6 +78,12 @@ class UserDetail extends React.Component {
       });
   }
 
+  // loadUsageInfo fetches both usage-related endpoints in parallel using
+  // Promise.all. Both endpoints perform server-side computation so the
+  // client simply renders the received metadata (thumbnail filename,
+  // upload date, commentCount). We set loading/error state to provide
+  // user feedback while requests are in-flight or if they fail.
+
   // Render user detail view
   handleThumbnailClick = (photoId) => {
     // Navigate to user photos view and scroll to the selected photo
@@ -86,6 +92,11 @@ class UserDetail extends React.Component {
       state: { scrollToPhotoId: photoId }
     });
   };
+
+  // Clicking a thumbnail navigates to the gallery route and passes the
+  // chosen photo id in `location.state.scrollToPhotoId`. The gallery view
+  // can read that state and call `scrollIntoView()` after rendering the
+  // photo list to ensure the selected photo is visible.
 
   renderUsageInfo() {
     const { recentPhoto, mostCommentedPhoto, usageLoading, usageError } = this.state;
@@ -104,6 +115,10 @@ class UserDetail extends React.Component {
           <div className="usage-title">Most Recently Uploaded Photo</div>
           {recentPhoto ? (
             <div className="thumbnail-container">
+              {/* Thumbnail image — src uses the app's `/images/<file_name>`
+                  convention. Clicking calls `handleThumbnailClick` which
+                  navigates to the user's gallery and requests the gallery
+                  scroll to the selected photo. */}
               <img
                 src={recentPhoto.file_name ? `/images/${recentPhoto.file_name}` : ''}
                 alt="Most Recent"
@@ -111,6 +126,8 @@ class UserDetail extends React.Component {
                 onClick={() => this.handleThumbnailClick(recentPhoto._id)}
                 ref={this.recentThumbRef}
               />
+              {/* Display readable upload date pulled from the server-side
+                  `date_time` field to ensure consistency with backend sorting. */}
               <div className="photo-date">Uploaded: {recentPhoto.date_time ? new Date(recentPhoto.date_time).toLocaleString() : ''}</div>
             </div>
           ) : (
@@ -121,6 +138,9 @@ class UserDetail extends React.Component {
           <div className="usage-title">Photo with the Most Comments</div>
           {mostCommentedPhoto ? (
             <div className="thumbnail-container">
+              {/* Most-commented thumbnail — server returns `commentCount` to
+                  avoid client-side counting. We display `0` if the value is
+                  missing or the photo has no comments. */}
               <img
                 src={mostCommentedPhoto.file_name ? `/images/${mostCommentedPhoto.file_name}` : ''}
                 alt="Most Commented"

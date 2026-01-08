@@ -512,6 +512,10 @@ describe("Photo App: Server API Tests", function () {
           });
           assert(user, "could not find user " + realUser.first_name + " " + realUser.last_name);
           const id = user._id;
+          // For each user we call both usage endpoints and validate the
+          // responses against the fixture data in `modelData/photoApp.js`.
+          // This ensures the server-side logic (most recent by date_time,
+          // most commented by comments.length) behaves as expected.
           // Get recent photo
           http.get(
             {
@@ -553,8 +557,8 @@ describe("Photo App: Server API Tests", function () {
                       responseBody2 += chunk;
                     });
                     response2.on("end", function () {
-                      assert.strictEqual(response2.statusCode, 200);
-                      const result2 = JSON.parse(responseBody2);
+                          assert.strictEqual(response2.statusCode, 200);
+                            const result2 = JSON.parse(responseBody2);
                       if (realPhotos.length === 0) {
                         assert.strictEqual(result2.photo, null);
                       } else {
@@ -586,6 +590,7 @@ describe("Photo App: Server API Tests", function () {
         },
         function (response) {
           assert.strictEqual(response.statusCode, 400);
+          // Invalid id format should return HTTP 400 for both endpoints.
           http.get(
             {
               hostname: host,
