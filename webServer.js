@@ -1174,6 +1174,85 @@ app.get('/activities', async (request, response) => {
 });
 
 /**
+ * GET /user-activities
+ * Returns the most recent activity for each user
+ * Used for displaying user activity in the sidebar
+ */
+app.get('/user-activities', async (request, response) => {
+  try {
+    // Get all users
+    const users = await User.find({}, '_id first_name last_name').lean();
+    
+    // For each user, get their most recent activity
+    const userActivities = await Promise.all(users.map(async (user) => {
+      const recentActivity = await Activity.findOne({ user_id: user._id })
+        .sort({ date_time: -1 })
+        .populate('user_id', 'first_name last_name')
+        .lean();
+
+      if (!recentActivity) {
+        return {
+          user: {
+            _id: user._id,
+            first_name: user.first_name,
+            last_name: user.last_name
+          },
+          activity: null
+        };
+      }
+
+      const processedActivity = {
+        _id: recentActivity._id,
+        activity_type: recentActivity.activity_type,
+        date_time: recentActivity.date_time
+      };
+
+      // Add activity-specific data
+      if (recentActivity.activity_type === 'photo_upload' && recentActivity.activity_data.photo_id) {
+        try {
+          const photo = await Photo.findById(recentActivity.activity_data.photo_id, 'file_name').lean();
+          if (photo) {
+            processedActivity.photo = {
+              _id: recentActivity.activity_data.photo_id,
+              file_name: photo.file_name
+            };
+          }
+        } catch (err) {
+          console.error('Error fetching photo for activity:', err);
+        }
+      } else if (recentActivity.activity_type === 'comment_added' && recentActivity.activity_data.photo_id) {
+        try {
+          const photo = await Photo.findById(recentActivity.activity_data.photo_id, 'file_name').lean();
+          if (photo) {
+            processedActivity.photo = {
+              _id: recentActivity.activity_data.photo_id,
+              file_name: photo.file_name
+            };
+            processedActivity.comment_text = recentActivity.activity_data.comment_text;
+          }
+        } catch (err) {
+          console.error('Error fetching photo for comment activity:', err);
+        }
+      }
+
+      return {
+        user: {
+          _id: user._id,
+          first_name: user.first_name,
+          last_name: user.last_name
+        },
+        activity: processedActivity
+      };
+    }));
+
+    response.status(200).json(userActivities);
+  } catch (err) {
+    console.error('Error fetching user activities:', err);
+    response.status(500).send('Internal server error');
+  }
+});
+
+/**
  * DELETE /photos/:photo_id
  * Deletes a photo owned by the current user
  * Also deletes associated comments and activities
