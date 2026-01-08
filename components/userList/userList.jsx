@@ -52,6 +52,10 @@ class UserList extends React.Component {
           </Typography>
         ) : (
           <List component="nav">
+            <ListItem button component={Link} to="/favorites">
+              <ListItemText primary="⭐ My Favorites" />
+            </ListItem>
+            <Divider />
             {users.map((user) => (
               <React.Fragment key={user._id}>
                 <ListItem button component={Link} to={`/users/${user._id}`}>

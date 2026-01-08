@@ -333,6 +333,13 @@ app.get("/photosOfUser/:id", async function (request, response) {
         };
       }));
 
+      // Check if current user has favorited this photo
+      let isFavorited = false;
+      if (currentUserId) {
+        const user = await User.findById(currentUserId);
+        isFavorited = user && user.favorites && user.favorites.some(id => id.equals(photo._id));
+      }
+
       return {
         _id: photo._id,
         user_id: photo.user_id,
@@ -341,7 +348,8 @@ app.get("/photosOfUser/:id", async function (request, response) {
         comments: processedComments,
         sharing_list: photo.sharing_list, // Include sharing info for frontend display
         likes: photo.likes || [], // Include likes array
-        likeCount: (photo.likes || []).length // Include like count for sorting
+        likeCount: (photo.likes || []).length, // Include like count for sorting
+        isFavorited: isFavorited // Include favorite status for current user
       };
     }));
 
@@ -833,6 +841,159 @@ app.delete('/photos/:photo_id/like', requireAuth, async (request, response) => {
   }
 });
 
+// FAVORITES ENDPOINTS
+// ===================
+
+/**
+ * POST /photos/:photo_id/favorite
+ * Add a photo to user's favorites
+ * 
+ * Request: POST /photos/:photo_id/favorite
+ * Response: { success: true, favorited: true }
+ * 
+ * Security: Requires authentication, validates photo exists and user can view it
+ */
+app.post('/photos/:photo_id/favorite', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const currentUserId = request.session.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Check if user can view this photo
+    if (!canUserViewPhoto(photo, currentUserId)) {
+      return response.status(403).json({ error: 'You do not have permission to view this photo' });
+    }
+
+    // Check if photo is already favorited
+    const user = await User.findById(currentUserId);
+    if (user.favorites && user.favorites.some(id => id.equals(photoId))) {
+      return response.status(400).json({ error: 'Photo is already in favorites' });
+    }
+
+    // Add to favorites
+    if (!user.favorites) {
+      user.favorites = [];
+    }
+    user.favorites.push(photoId);
+    await user.save();
+
+    return response.status(200).json({ 
+      success: true, 
+      favorited: true 
+    });
+  } catch (err) {
+    console.error('Error adding photo to favorites:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /photos/:photo_id/favorite
+ * Remove a photo from user's favorites
+ * 
+ * Request: DELETE /photos/:photo_id/favorite
+ * Response: { success: true, favorited: false }
+ * 
+ * Security: Requires authentication
+ */
+app.delete('/photos/:photo_id/favorite', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const currentUserId = request.session.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    // Remove from favorites
+    const user = await User.findById(currentUserId);
+    if (!user.favorites) {
+      return response.status(400).json({ error: 'Photo is not in favorites' });
+    }
+
+    const favoriteIndex = user.favorites.findIndex(id => id.equals(photoId));
+    if (favoriteIndex === -1) {
+      return response.status(400).json({ error: 'Photo is not in favorites' });
+    }
+
+    user.favorites.splice(favoriteIndex, 1);
+    await user.save();
+
+    return response.status(200).json({ 
+      success: true, 
+      favorited: false 
+    });
+  } catch (err) {
+    console.error('Error removing photo from favorites:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * GET /favorites
+ * Get user's favorited photos
+ * 
+ * Response: Array of photo objects with full details
+ * 
+ * Security: Requires authentication
+ */
+app.get('/favorites', requireAuth, async (request, response) => {
+  try {
+    const currentUserId = request.session.userId;
+
+    // Get user's favorites
+    const user = await User.findById(currentUserId).populate('favorites');
+    if (!user || !user.favorites) {
+      return response.status(200).json([]);
+    }
+
+    // Get full photo details for each favorite
+    const favoritePhotos = await Promise.all(user.favorites.map(async (photoId) => {
+      const photo = await Photo.findById(photoId);
+      if (!photo) return null;
+
+      // Check if user can still view this photo (permissions might have changed)
+      if (!canUserViewPhoto(photo, currentUserId)) {
+        // Remove from favorites if user can no longer view it
+        user.favorites = user.favorites.filter(id => !id.equals(photoId));
+        await user.save();
+        return null;
+      }
+
+      // Get photo owner info
+      const owner = await User.findById(photo.user_id, 'first_name last_name');
+
+      return {
+        _id: photo._id,
+        file_name: photo.file_name,
+        date_time: photo.date_time,
+        user_id: photo.user_id,
+        owner: {
+          _id: owner._id,
+          first_name: owner.first_name,
+          last_name: owner.last_name
+        }
+      };
+    }));
+
+    // Filter out nulls (photos that were removed or permissions changed)
+    const validFavorites = favoritePhotos.filter(photo => photo !== null);
+
+    response.status(200).json(validFavorites);
+  } catch (err) {
+    console.error('Error getting favorites:', err);
+    response.status(500).send('Internal server error');
+  }
+});
+
 // PHOTO SHARING ENDPOINTS
 // =======================
 
@@ -1052,6 +1213,12 @@ app.delete('/photos/:photo_id', requireAuth, async (request, response) => {
       ]
     });
 
+    // Remove this photo from all users' favorites lists
+    await User.updateMany(
+      { favorites: photoId },
+      { $pull: { favorites: photoId } }
+    );
+
     // Delete the photo (this will also delete associated comments due to schema design)
     await Photo.findByIdAndDelete(photoId);
 
@@ -1161,7 +1328,13 @@ app.delete('/user/:id', requireAuth, async (request, response) => {
         { $pull: { likes: userId } }
       ).session(session);
 
-      // 4. Delete all activities related to this user
+      // 4. Remove this user from all other users' favorites lists
+      await User.updateMany(
+        { favorites: userId },
+        { $pull: { favorites: userId } }
+      ).session(session);
+
+      // 5. Delete all activities related to this user
       await Activity.deleteMany({ user_id: userId }).session(session);
 
       // 5. Delete the user account

@@ -50,7 +50,7 @@ const renderCommentWithMentions = (commentText, mentions, users) => {
   return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
-function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete, onLikeToggle }) {
+function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete, onLikeToggle, onFavoriteToggle }) {
   const [commentText, setCommentText] = React.useState('');
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [suggestions, setSuggestions] = React.useState([]);
@@ -200,6 +200,30 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId
             {(photo.likes || []).length} like{(photo.likes || []).length !== 1 ? 's' : ''}
           </Typography>
         </div>
+
+        {/* Favorite button */}
+        {currentUserId && (
+          <div style={{ marginTop: 4 }}>
+            <button 
+              onClick={() => onFavoriteToggle(photo._id)}
+              disabled={photo.isFavorited}
+              style={{ 
+                backgroundColor: photo.isFavorited ? '#ff9800' : '#e0e0e0',
+                color: photo.isFavorited ? 'white' : 'black',
+                border: 'none', 
+                borderRadius: 4, 
+                padding: '4px 8px', 
+                cursor: photo.isFavorited ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                opacity: photo.isFavorited ? 0.7 : 1
+              }}
+            >
+              {photo.isFavorited ? '⭐ Favorited' : '☆ Favorite'}
+            </button>
+          </div>
+        )}
         
         <Divider sx={{ my: 1 }} />
         
@@ -403,6 +427,38 @@ class UserPhotos extends React.Component {
       });
   };
 
+  // NEW: toggle favorite on photo
+  toggleFavorite = (photoId) => {
+    // Find the photo to check if it's already favorited
+    const photo = this.state.photos.find(p => p._id === photoId);
+    if (!photo) return;
+
+    const isFavorited = photo.isFavorited;
+    const endpoint = isFavorited ? 'delete' : 'post';
+    const url = `/photos/${photoId}/favorite`;
+
+    axios[endpoint](url)
+      .then(response => {
+        // Update the photo's favorite status in state immediately for instant UI feedback
+        this.setState(prevState => ({
+          photos: prevState.photos.map(p => 
+            p._id === photoId 
+              ? { 
+                  ...p, 
+                  isFavorited: !isFavorited
+                }
+              : p
+          )
+        }));
+      })
+      .catch(error => {
+        console.error('Error toggling favorite:', error);
+        alert('Failed to update favorite. Please try again.');
+        // Reload photos to revert any optimistic updates
+        this.loadPhotos();
+      });
+  };
+
   render() {
     const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
@@ -416,6 +472,7 @@ class UserPhotos extends React.Component {
             onPhotoDelete={this.deletePhoto}
             onCommentDelete={this.deleteComment}
             onLikeToggle={this.toggleLike}
+            onFavoriteToggle={this.toggleFavorite}
             currentUserId={this.props.currentUserId}
             isHighlighted={highlightedPhotoId === p._id}
             photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}

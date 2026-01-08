@@ -21,6 +21,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // Array of photo IDs that this user has favorited
+  favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Photo' }],
 });
 
 /**

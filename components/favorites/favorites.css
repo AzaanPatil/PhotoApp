@@ -1,0 +1,38 @@
+.favorite-thumbnail-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  padding-bottom: 100%; /* 1:1 aspect ratio */
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.favorite-thumbnail-container:hover {
+  transform: scale(1.05);
+}
+
+.favorite-thumbnail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.favorite-thumbnail-container:hover .favorite-thumbnail {
+  opacity: 0.8;
+}
+
+.favorite-remove-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.favorite-thumbnail-container:hover .favorite-remove-btn {
+  opacity: 1;
+}
