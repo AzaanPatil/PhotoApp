@@ -18,6 +18,14 @@ const commentSchema = new mongoose.Schema({
 
 /**
  * Define the Mongoose Schema for a Photo.
+ * 
+ * PHOTO SHARING SYSTEM:
+ * - sharing_list: null = public (everyone can view)
+ * - sharing_list: [] = private (only owner can view)  
+ * - sharing_list: [userId1, userId2] = shared (owner + listed users can view)
+ * 
+ * This allows fine-grained control over photo visibility while maintaining
+ * backwards compatibility with existing photos (null = public).
  */
 const photoSchema = new mongoose.Schema({
   // Name of the file containing the photo (in the project6/images directory).
@@ -28,6 +36,9 @@ const photoSchema = new mongoose.Schema({
   user_id: mongoose.Schema.Types.ObjectId,
   // Array of comment objects representing the comments made on this photo.
   comments: [commentSchema],
+  // Array of user IDs who can view this photo. If null/undefined, photo is public.
+  // If empty array, only owner can view. If populated, owner + listed users can view.
+  sharing_list: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 });
 
 /**

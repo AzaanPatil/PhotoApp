@@ -145,6 +145,20 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
         <Typography variant="caption">
           Taken: {prettyDate(photo.date_time)}
         </Typography>
+        
+        {/* Sharing indicator - shows photo visibility status */}
+        {photo.sharing_list !== undefined && (
+          <Typography variant="caption" style={{ display: 'block', marginTop: 4 }}>
+            {photo.sharing_list === null ? (
+              <span style={{ color: '#4caf50' }}>🌐 Public</span>
+            ) : photo.sharing_list.length === 0 ? (
+              <span style={{ color: '#f44336' }}>🔒 Private</span>
+            ) : (
+              <span style={{ color: '#ff9800' }}>👥 Shared with {photo.sharing_list.length} user{photo.sharing_list.length !== 1 ? 's' : ''}</span>
+            )}
+          </Typography>
+        )}
+        
         <Divider sx={{ my: 1 }} />
         
         {/* Existing comments */}
