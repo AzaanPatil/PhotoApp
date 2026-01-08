@@ -50,7 +50,7 @@ const renderCommentWithMentions = (commentText, mentions, users) => {
   return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
-function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
+function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete }) {
   const [commentText, setCommentText] = React.useState('');
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [suggestions, setSuggestions] = React.useState([]);
@@ -156,6 +156,24 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
             ) : (
               <span style={{ color: '#ff9800' }}>👥 Shared with {photo.sharing_list.length} user{photo.sharing_list.length !== 1 ? 's' : ''}</span>
             )}
+            {/* Delete photo button - only show if current user owns the photo */}
+            {currentUserId === photo.user_id && (
+              <button 
+                onClick={() => onPhotoDelete(photo._id)}
+                style={{ 
+                  marginLeft: 8, 
+                  backgroundColor: '#f44336', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: 4, 
+                  padding: '2px 6px', 
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                Delete Photo
+              </button>
+            )}
           </Typography>
         )}
         
@@ -173,6 +191,24 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
               <Typography variant="body2">
                 {renderCommentWithMentions(c.comment, c.mentions || [], users)}
               </Typography>
+              {/* Delete comment button - only show if current user is the comment author */}
+              {currentUserId === c.user._id && (
+                <button 
+                  onClick={() => onCommentDelete(c._id)}
+                  style={{ 
+                    marginLeft: 8, 
+                    backgroundColor: '#f44336', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: 4, 
+                    padding: '1px 4px', 
+                    cursor: 'pointer',
+                    fontSize: '10px'
+                  }}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -279,6 +315,36 @@ class UserPhotos extends React.Component {
       });
   };
 
+  // NEW: delete photo
+  deletePhoto = (photoId) => {
+    if (window.confirm('Are you sure you want to delete this photo? This action cannot be undone.')) {
+      axios.delete(`/photos/${photoId}`)
+        .then(() => {
+          // After successful delete, refresh photos
+          this.loadPhotos();
+        })
+        .catch(error => {
+          console.error('Error deleting photo:', error);
+          alert('Failed to delete photo. Please try again.');
+        });
+    }
+  };
+
+  // NEW: delete comment
+  deleteComment = (commentId) => {
+    if (window.confirm('Are you sure you want to delete this comment?')) {
+      axios.delete(`/comments/${commentId}`)
+        .then(() => {
+          // After successful delete, refresh photos
+          this.loadPhotos();
+        })
+        .catch(error => {
+          console.error('Error deleting comment:', error);
+          alert('Failed to delete comment. Please try again.');
+        });
+    }
+  };
+
   render() {
     const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
@@ -289,6 +355,9 @@ class UserPhotos extends React.Component {
             key={p._id} 
             photo={p} 
             onAddComment={this.addComment}
+            onPhotoDelete={this.deletePhoto}
+            onCommentDelete={this.deleteComment}
+            currentUserId={this.props.currentUserId}
             isHighlighted={highlightedPhotoId === p._id}
             photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}
           />

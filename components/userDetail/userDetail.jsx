@@ -123,6 +123,21 @@ class UserDetail extends React.Component {
     });
   };
 
+  // Handle account deletion
+  handleDeleteAccount = () => {
+    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone and will permanently remove all your photos, comments, and data.')) {
+      axios.delete(`/user/${this.props.match.params.userId}`)
+        .then(() => {
+          // Redirect to login page after successful deletion
+          window.location.href = '/';
+        })
+        .catch(error => {
+          console.error('Error deleting account:', error);
+          alert('Failed to delete account. Please try again.');
+        });
+    }
+  };
+
   // Clicking a thumbnail navigates to the gallery route and passes the
   // chosen photo id in `location.state.scrollToPhotoId`. The gallery view
   // can read that state and call `scrollIntoView()` after rendering the
@@ -263,6 +278,17 @@ class UserDetail extends React.Component {
           >
             View {user.first_name} Photos
           </Button>
+          {/* Delete account button - only show if current user is viewing their own profile */}
+          {this.props.currentUserId === user._id && (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={this.handleDeleteAccount}
+              sx={{ mt: 2, ml: 2 }}
+            >
+              Delete Account
+            </Button>
+          )}
         </CardContent>
       </Card>
     );

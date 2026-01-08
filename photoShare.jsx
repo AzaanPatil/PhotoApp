@@ -142,10 +142,10 @@ class PhotoShare extends React.Component {
                     )}
                   />
                   <Route path="/users/:userId"
-                    render={props => <UserDetail {...props} onContextChange={this.handleContextChange} />}
+                    render={props => <UserDetail {...props} currentUserId={userId} onContextChange={this.handleContextChange} />}
                   />
                   <Route path="/photos/:userId"
-                    render={props => <UserPhotos {...props} onContextChange={this.handleContextChange} />}
+                    render={props => <UserPhotos {...props} currentUserId={userId} onContextChange={this.handleContextChange} />}
                   />
                   <Route path="/activities" component={Activities} />
                   <Route path="/users" component={UserList} />

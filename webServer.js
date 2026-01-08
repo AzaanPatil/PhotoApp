@@ -71,6 +71,7 @@ const express = require("express");
 const session = require("express-session");
 const multer = require("multer");
 const fs = require('fs');
+const path = require('path');
 
 const app = express();
 
@@ -876,6 +877,183 @@ app.get('/activities', async (request, response) => {
     response.status(200).json(processedActivities);
   } catch (err) {
     console.error('Error fetching activities:', err);
+    response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /photos/:photo_id
+ * Deletes a photo owned by the current user
+ * Also deletes associated comments and activities
+ * Only the photo owner can delete their photos
+ */
+app.delete('/photos/:photo_id', requireAuth, async (request, response) => {
+  const photoId = request.params.photo_id;
+  const currentUserId = request.session.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(photoId)) {
+    return response.status(400).send('Invalid photo ID format');
+  }
+
+  try {
+    // Find the photo and verify ownership
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).send('Photo not found');
+    }
+
+    // Check if current user owns this photo
+    if (photo.user_id.toString() !== currentUserId.toString()) {
+      return response.status(403).send('You can only delete your own photos');
+    }
+
+    // Delete the physical file from disk
+    const filePath = path.join(imagesDir, photo.file_name);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Delete all activities related to this photo
+    await Activity.deleteMany({
+      $or: [
+        { 'activity_data.photo_id': photoId },
+        { activity_type: 'photo_upload', user_id: currentUserId, 'activity_data.photo_id': photoId }
+      ]
+    });
+
+    // Delete the photo (this will also delete associated comments due to schema design)
+    await Photo.findByIdAndDelete(photoId);
+
+    response.status(200).json({ success: true, message: 'Photo deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting photo:', err);
+    response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /comments/:comment_id
+ * Deletes a comment made by the current user
+ * Can delete comments on any photo (own or others')
+ * Updates activity records accordingly
+ */
+app.delete('/comments/:comment_id', requireAuth, async (request, response) => {
+  const commentId = request.params.comment_id;
+  const currentUserId = request.session.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(commentId)) {
+    return response.status(400).send('Invalid comment ID format');
+  }
+
+  try {
+    // Find the photo containing this comment
+    const photo = await Photo.findOne({ 'comments._id': commentId });
+    if (!photo) {
+      return response.status(404).send('Comment not found');
+    }
+
+    // Find the specific comment
+    const comment = photo.comments.id(commentId);
+    if (!comment) {
+      return response.status(404).send('Comment not found');
+    }
+
+    // Check if current user owns this comment
+    if (comment.user_id.toString() !== currentUserId.toString()) {
+      return response.status(403).send('You can only delete your own comments');
+    }
+
+    // Remove the comment from the photo
+    photo.comments.pull(commentId);
+    await photo.save();
+
+    // Delete associated activity
+    await Activity.deleteMany({
+      activity_type: 'comment_added',
+      user_id: currentUserId,
+      'activity_data.comment_id': commentId
+    });
+
+    response.status(200).json({ success: true, message: 'Comment deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting comment:', err);
+    response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /user/:id
+ * Deletes an entire user account and all associated data
+ * Only the account owner can delete their own account
+ * Includes final warning prompt (handled on frontend)
+ * Cascading delete: removes user, all photos, all comments, all activities
+ */
+app.delete('/user/:id', requireAuth, async (request, response) => {
+  const userId = request.params.id;
+  const currentUserId = request.session.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return response.status(400).send('Invalid user ID format');
+  }
+
+  // Verify that user can only delete their own account
+  if (userId !== currentUserId.toString()) {
+    return response.status(403).send('You can only delete your own account');
+  }
+
+  try {
+    // Start a session for transaction-like behavior
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. Delete all photos owned by this user and their files
+      const userPhotos = await Photo.find({ user_id: userId }).session(session);
+      for (const photo of userPhotos) {
+        // Delete physical files
+        const filePath = path.join(imagesDir, photo.file_name);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+      await Photo.deleteMany({ user_id: userId }).session(session);
+
+      // 2. Remove this user's comments from all photos
+      await Photo.updateMany(
+        { 'comments.user_id': userId },
+        { $pull: { comments: { user_id: userId } } }
+      ).session(session);
+
+      // 3. Delete all activities related to this user
+      await Activity.deleteMany({ user_id: userId }).session(session);
+
+      // 4. Delete the user account
+      await User.findByIdAndDelete(userId).session(session);
+
+      // Commit the transaction
+      await session.commitTransaction();
+
+      // Destroy the session and log out the user
+      request.session.destroy((err) => {
+        if (err) {
+          console.error('Error destroying session after account deletion:', err);
+        }
+        response.status(200).json({
+          success: true,
+          message: 'Account deleted successfully. You have been logged out.'
+        });
+      });
+
+    } catch (transactionError) {
+      // Abort transaction on error
+      await session.abortTransaction();
+      throw transactionError;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (err) {
+    console.error('Error deleting user account:', err);
     response.status(500).send('Internal server error');
   }
 });
