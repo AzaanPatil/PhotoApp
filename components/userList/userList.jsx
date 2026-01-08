@@ -48,7 +48,7 @@ class UserList extends React.Component {
   }
 
   fetchUsers = () => {
-    axios.get('/user/list')
+    axios.get('/user/listWithCounts')
       .then((response) => {
         this.setState({ users: response.data });
       })
@@ -238,6 +238,35 @@ class UserList extends React.Component {
               </ListItem>
             )}
           </List>
+        )}
+        {/* All users with counts */}
+        {isLoggedIn && users && users.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Typography variant="subtitle2" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
+              All Users
+            </Typography>
+            <List component="nav" sx={{ width: '100%', p: 0 }}>
+              {users.map(u => (
+                <ListItem key={u._id} button component={Link} to={`/users/${u._id}`} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1 }}>{u.first_name[0]}{u.last_name[0]}</Avatar>
+                    <ListItemText primary={`${u.first_name} ${u.last_name}`} primaryTypographyProps={{ variant: 'body2' }} />
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Chip label={u.photoCount} size="small" sx={{ bgcolor: 'green', color: '#fff', height: 22 }} title="Number of photos" />
+                    <Chip 
+                      label={u.commentCount} 
+                      size="small" 
+                      sx={{ bgcolor: 'crimson', color: '#fff', height: 22, cursor: 'pointer' }} 
+                      component={Link}
+                      to={`/users/${u._id}/comments`}
+                      title="Comments authored by user"
+                    />
+                  </Box>
+                </ListItem>
+              ))}
+            </List>
+          </div>
         )}
       </div>
     );

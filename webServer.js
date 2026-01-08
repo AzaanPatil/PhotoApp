@@ -269,6 +269,87 @@ app.get("/user/list", async function (request, response) {
   }
 });
 
+// Return user list with photo and authored-comment counts for each user
+app.get('/user/listWithCounts', async function (request, response) {
+  try {
+    // Fetch basic user info
+    const users = await User.find({}, '_id first_name last_name').lean();
+
+    // Aggregate photo counts per user
+    const photoCounts = await Photo.aggregate([
+      { $group: { _id: '$user_id', count: { $sum: 1 } } }
+    ]);
+
+    // Aggregate comment counts per author across all photos
+    const commentCounts = await Photo.aggregate([
+      { $unwind: '$comments' },
+      { $group: { _id: '$comments.user_id', count: { $sum: 1 } } }
+    ]);
+
+    const photoCountMap = {};
+    photoCounts.forEach(p => { photoCountMap[p._id.toString()] = p.count; });
+
+    const commentCountMap = {};
+    commentCounts.forEach(c => { commentCountMap[c._id.toString()] = c.count; });
+
+    // Build response combining counts (default to 0)
+    const result = users.map(u => ({
+      _id: u._id,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      photoCount: photoCountMap[u._id.toString()] || 0,
+      commentCount: commentCountMap[u._id.toString()] || 0
+    }));
+
+    response.status(200).json(result);
+  } catch (err) {
+    console.error('Error fetching user list with counts:', err);
+    response.status(500).send({ message: 'Internal server error fetching user list counts.' });
+  }
+});
+
+// Return all comments authored by a given user (with photo thumbnail info)
+app.get('/commentsOfUser/:userId', async function (request, response) {
+  const userId = request.params.userId;
+  const currentUserId = request.session?.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return response.status(400).send('Invalid user ID');
+  }
+
+  try {
+    // Find photos that contain comments by the user
+    const photosWithComments = await Photo.find({ 'comments.user_id': userId }).lean();
+
+    const results = [];
+
+    for (const photo of photosWithComments) {
+      // Respect visibility rules: only include photos current user can view
+      if (!canUserViewPhoto(photo, currentUserId)) continue;
+
+      const matchingComments = (photo.comments || []).filter(c => c.user_id && c.user_id.toString() === userId.toString());
+      for (const comment of matchingComments) {
+        results.push({
+          comment_id: comment._id,
+          comment: comment.comment,
+          date_time: comment.date_time,
+          photo_id: photo._id,
+          file_name: photo.file_name,
+          photo_owner_id: photo.user_id
+        });
+      }
+    }
+
+    // Sort by date_time descending
+    results.sort((a, b) => new Date(b.date_time) - new Date(a.date_time));
+
+    response.status(200).json(results);
+  } catch (err) {
+    console.error('Error fetching comments of user:', err);
+    response.status(500).send({ message: 'Internal server error fetching comments for user.' });
+  }
+});
+
 app.get("/user/:id", async function (request, response) {
   const id = request.params.id;
   if(!mongoose.Types.ObjectId.isValid(id)) {

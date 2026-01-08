@@ -17,6 +17,7 @@ import UserPhotos from './components/userPhotos/userPhotos';
 import LoginRegister from './components/loginRegister/LoginRegister';
 import Activities from './components/activities/Activities';
 import Favorites from './components/favorites/Favorites';
+import CommentsByUser from './components/commentsByUser/CommentsByUser';
 
 class PhotoShare extends React.Component {
   constructor(props) {
@@ -144,6 +145,9 @@ class PhotoShare extends React.Component {
                   />
                   <Route path="/users/:userId"
                     render={props => <UserDetail {...props} currentUserId={userId} onContextChange={this.handleContextChange} />}
+                  />
+                  <Route path="/users/:userId/comments"
+                    render={props => <CommentsByUser {...props} />}
                   />
                   <Route path="/photos/:userId"
                     render={props => <UserPhotos {...props} currentUserId={userId} onContextChange={this.handleContextChange} />}
