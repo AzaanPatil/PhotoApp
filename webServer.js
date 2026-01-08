@@ -134,8 +134,9 @@ app.post('/admin/login', async (request, response) => {
 
   try {
     const user = await User.findOne({ login_name: login_name.toLowerCase() });
+    const passwordUtil = require('./password');
 
-    if (!user || user.password !== password) {
+    if (!user || !passwordUtil.doesPasswordMatch(user.password_digest, user.salt, password)) {
       return response.status(400).json({ error: 'Invalid login name or password' });
     }
 
@@ -600,9 +601,13 @@ app.post('/user', async (request, response) => {
       return response.status(400).send({ error: 'Login name already exists' });
     }
 
+    const passwordUtil = require('./password');
+    const pwEntry = passwordUtil.makePasswordEntry(password);
+
     const newUser = new User({
       login_name: login_name.toLowerCase(),
-      password,
+      password_digest: pwEntry.hash,
+      salt: pwEntry.salt,
       first_name,
       last_name,
       location,

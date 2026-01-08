@@ -44,7 +44,10 @@ Promise.all(removePromises)
 
     const userModels = models.userListModel();
     const mapFakeId2RealId = {};
+    const passwordUtil = require('./password');
+
     const userPromises = userModels.map(function (user) {
+      const pw = passwordUtil.makePasswordEntry('weak');
       return User.create({
         first_name: user.first_name,
         last_name: user.last_name,
@@ -52,7 +55,8 @@ Promise.all(removePromises)
         description: user.description,
         occupation: user.occupation,
         login_name: user.last_name.toLowerCase(),
-        password: "weak",
+        password_digest: pw.hash,
+        salt: pw.salt,
       })
         .then(function (userObj) {
           // Set the unique ID of the object. We use the MongoDB generated _id

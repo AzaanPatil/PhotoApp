@@ -7,7 +7,8 @@
   "scripts": {
     "build": "webpack --devtool eval-cheap-module-source-map",
     "build:w": "webpack --devtool eval-cheap-module-source-map --watch",
-    "lint": "eslint webServer.js loadDatabase.js *.jsx components/*/*.jsx || exit 0"
+    "lint": "eslint webServer.js loadDatabase.js *.jsx components/*/*.jsx || exit 0",
+    "test": "mocha test/serverApiTest.js test/sessionInputApiTest.js test/passwordTest.js --exit"
   },
   "author": "Mendel Rosenblum <mendel@cs.stanford.edu> ",
   "contributors": [
