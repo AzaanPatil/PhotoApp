@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
+// Ensure cookies (express-session) are sent with requests so session persists across reloads
+axios.defaults.withCredentials = true;
 import {
   HashRouter, Route, Switch
 } from 'react-router-dom';
@@ -38,6 +40,25 @@ class PhotoShare extends React.Component {
   }
 
   checkAuthStatus = async () => {
+    // Try to restore session from localStorage quickly so refresh feels seamless.
+    const stored = window.localStorage.getItem('photoshare_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        this.setState({
+          isLoggedIn: true,
+          userId: parsed.userId,
+          firstName: parsed.first_name || parsed.firstName || '',
+          lastName: parsed.last_name || parsed.lastName || '',
+          checkingAuth: false,
+        });
+      } catch (e) {
+        // If parse fails, remove invalid entry
+        window.localStorage.removeItem('photoshare_user');
+      }
+    }
+
+    // Validate session with server in background. If invalid, clear stored session.
     try {
       const response = await axios.get('/admin/session');
       this.setState({
@@ -47,8 +68,11 @@ class PhotoShare extends React.Component {
         lastName: response.data.last_name,
         checkingAuth: false,
       });
+      // Ensure localStorage is up-to-date with server
+      window.localStorage.setItem('photoshare_user', JSON.stringify(response.data));
     } catch (error) {
-      console.log('No active session');
+      // Server has no active session, clear any stored client session
+      window.localStorage.removeItem('photoshare_user');
       this.setState({
         isLoggedIn: false,
         userId: null,
@@ -62,10 +86,20 @@ class PhotoShare extends React.Component {
   handleLoginSuccess = (userData) => {
   this.setState({
     isLoggedIn: true,
-    userId: userData.userId,
+    userId: userData.userId || userData._id,
     firstName: userData.first_name,
     lastName: userData.last_name,
   }, () => {
+    // Persist login on the client so refresh keeps the UI logged-in
+    try {
+      window.localStorage.setItem('photoshare_user', JSON.stringify({
+        userId: this.state.userId,
+        first_name: this.state.firstName,
+        last_name: this.state.lastName
+      }));
+    } catch (e) {
+      // ignore storage errors
+    }
     // After state updates, navigate to user detail
     window.location.hash = `#/users/${userData.userId}`;
   });
