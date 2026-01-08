@@ -5,6 +5,10 @@ import {
   Card,
   CardContent,
   Typography,
+  TextField,
+  Switch,
+  FormControlLabel,
+  Box,
 } from "@mui/material"; //Stylized using MUI components
 import "./userDetail.css";
 import {Link} from "react-router-dom";
@@ -19,6 +23,17 @@ class UserDetail extends React.Component {
       user: null,
       recentPhoto: null,
       mostCommentedPhoto: null,
+      editing: false,
+      form: {
+        first_name: '',
+        last_name: '',
+        location: '',
+        description: '',
+        occupation: '',
+        website: '',
+        theme: 'light'
+      },
+      photoFile: null,
       mentions: [],
       usageLoading: true,
       usageError: null,
@@ -52,6 +67,16 @@ class UserDetail extends React.Component {
       .then(response => {
         const userData = response.data;
         this.setState({ user: userData });
+        // initialize form values
+        this.setState({ form: {
+          first_name: userData.first_name || '',
+          last_name: userData.last_name || '',
+          location: userData.location || '',
+          description: userData.description || '',
+          occupation: userData.occupation || '',
+          website: userData.website || '',
+          theme: userData.theme || 'light'
+        }});
         // Update TopBar context with user's name
         if (userData && this.props.onContextChange) {
           this.props.onContextChange(`${userData.first_name} ${userData.last_name}`);
@@ -135,6 +160,48 @@ class UserDetail extends React.Component {
           console.error('Error deleting account:', error);
           alert('Failed to delete account. Please try again.');
         });
+    }
+  };
+
+  handleEditToggle = () => {
+    this.setState(prev => ({ editing: !prev.editing }));
+  };
+
+  handleInputChange = (e) => {
+    const { name, value } = e.target;
+    this.setState(prev => ({ form: { ...prev.form, [name]: value } }));
+  };
+
+  handleThemeToggle = (e) => {
+    const val = e.target.checked ? 'dark' : 'light';
+    this.setState(prev => ({ form: { ...prev.form, theme: val } }));
+  };
+
+  handlePhotoSelect = (e) => {
+    const file = e.target.files && e.target.files[0];
+    this.setState({ photoFile: file });
+  };
+
+  handleSaveProfile = async () => {
+    const userId = this.props.match.params.userId;
+    try {
+      // If a photo file selected, upload it first
+      if (this.state.photoFile) {
+        const formData = new FormData();
+        formData.append('profilephoto', this.state.photoFile, this.state.photoFile.name);
+        await axios.post(`/user/${userId}/photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+
+      // Send profile updates (server validates and persists)
+      const updates = { ...this.state.form };
+      await axios.patch(`/user/${userId}`, updates);
+
+      // Reload user to show updated data
+      await this.loadUser();
+      this.setState({ editing: false, photoFile: null });
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      alert('Failed to save profile.');
     }
   };
 
@@ -255,18 +322,57 @@ class UserDetail extends React.Component {
     return (
       <Card className="User-Card">
         <CardContent>
-          <Typography variant="h5" gutterBottom>
-            {user.first_name} {user.last_name}
-          </Typography>
+          <Box display="flex" alignItems="center" gap={2}>
+            {/* Profile photo if present */}
+            {user.profile_photo ? (
+              <img src={`/images/${user.profile_photo}`} alt="Profile" className="profile-photo" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%' }} />
+            ) : (
+              <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#ddd' }} />
+            )}
+            <div>
+              <Typography variant="h5" gutterBottom>
+                {user.first_name} {user.last_name}
+              </Typography>
+              {user.website && (
+                <Typography variant="body2"><a href={user.website} target="_blank" rel="noreferrer">{user.website}</a></Typography>
+              )}
+            </div>
+          </Box>
           <Typography variant="body1" color="textSecondary" gutterBottom>
             <strong>Location:</strong> {user.location}
           </Typography>
           <Typography variant="body1" color="textSecondary" gutterBottom>
             <strong>Occupation:</strong> {user.occupation}
           </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            <strong>Theme:</strong> {user.theme || 'light'}
+          </Typography>
           <Typography variant="body1" gutterBottom>
             {user.description}
           </Typography>
+          {/* Edit controls - only the profile owner sees these */}
+          {this.props.currentUserId === user._id && (
+            <div style={{ marginTop: 12 }}>
+              <Button variant="outlined" onClick={this.handleEditToggle} sx={{ mr: 1 }}>{this.state.editing ? 'Cancel' : 'Edit Profile'}</Button>
+              {this.state.editing && (
+                <div style={{ marginTop: 12 }}>
+                  <TextField label="First Name" name="first_name" value={this.state.form.first_name} onChange={this.handleInputChange} fullWidth margin="dense" />
+                  <TextField label="Last Name" name="last_name" value={this.state.form.last_name} onChange={this.handleInputChange} fullWidth margin="dense" />
+                  <TextField label="Location" name="location" value={this.state.form.location} onChange={this.handleInputChange} fullWidth margin="dense" />
+                  <TextField label="Occupation" name="occupation" value={this.state.form.occupation} onChange={this.handleInputChange} fullWidth margin="dense" />
+                  <TextField label="Website" name="website" value={this.state.form.website} onChange={this.handleInputChange} fullWidth margin="dense" />
+                  <TextField label="Description" name="description" value={this.state.form.description} onChange={this.handleInputChange} fullWidth margin="dense" multiline rows={3} />
+                  <FormControlLabel control={<Switch checked={this.state.form.theme === 'dark'} onChange={this.handleThemeToggle} />} label="Dark mode" />
+                  <div style={{ marginTop: 8 }}>
+                    <input type="file" accept="image/*" onChange={this.handlePhotoSelect} />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Button variant="contained" color="primary" onClick={this.handleSaveProfile}>Save</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {this.renderUsageInfo()}
           {this.renderMentions()}
           <Button

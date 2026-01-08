@@ -25,6 +25,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // Optional profile photo filename stored in /images
+  profile_photo: String,
+  // Optional personal website URL
+  website: String,
+  // UI theme preference: 'light' or 'dark'
+  theme: {
+    type: String,
+    enum: ['light', 'dark'],
+    default: 'light'
+  },
   // Array of photo IDs that this user has favorited
   favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Photo' }],
 });

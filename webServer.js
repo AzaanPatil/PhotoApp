@@ -360,7 +360,8 @@ app.get("/user/:id", async function (request, response) {
   }
 
   try {
-    const user = await User.findById(id, '_id first_name last_name location description occupation').lean();
+    // Include new optional fields: website, profile_photo, theme
+    const user = await User.findById(id, '_id first_name last_name location description occupation website profile_photo theme').lean();
     if (!user) {
       console.log("User with _id:" + id + " not found.");
       response.status(400).send("Not found");
@@ -370,6 +371,70 @@ app.get("/user/:id", async function (request, response) {
   } catch (err) {
     console.error("Error fetching user:", err);
     response.status(500).send({ message: "Internal server error fetching user." });
+  }
+});
+
+// Upload or update profile photo for a user. Requires authentication and
+// that the authenticated user matches the user being updated.
+app.post('/user/:id/photo', requireAuth, upload.single('profilephoto'), async function (request, response) {
+  const id = request.params.id;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return response.status(400).send('Invalid user ID');
+  }
+
+  if (!request.file) {
+    return response.status(400).send({ error: 'No file uploaded' });
+  }
+
+  // Only allow users to update their own profile
+  if (request.session.userId.toString() !== id.toString()) {
+    return response.status(403).send('Forbidden');
+  }
+
+  try {
+    const user = await User.findById(id);
+    if (!user) return response.status(400).send('User not found');
+
+    user.profile_photo = request.file.filename;
+    await user.save();
+
+    return response.status(200).json({ profile_photo: user.profile_photo });
+  } catch (err) {
+    console.error('Error uploading profile photo:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
+// Update user profile fields. Data validation and updates are done server-side.
+app.patch('/user/:id', requireAuth, async function (request, response) {
+  const id = request.params.id;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return response.status(400).send('Invalid user ID');
+  }
+
+  // Only allow users to update their own profile
+  if (request.session.userId.toString() !== id.toString()) {
+    return response.status(403).send('Forbidden');
+  }
+
+  const allowed = ['first_name', 'last_name', 'location', 'description', 'occupation', 'website', 'theme'];
+  const updates = {};
+  for (const key of allowed) {
+    if (request.body[key] !== undefined) updates[key] = request.body[key];
+  }
+
+  // Validate theme value if provided
+  if (updates.theme && !['light', 'dark'].includes(updates.theme)) {
+    return response.status(400).send('Invalid theme value');
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(id, { $set: updates }, { new: true, fields: '_id first_name last_name location description occupation website profile_photo theme' }).lean();
+    if (!user) return response.status(400).send('User not found');
+    return response.status(200).json(user);
+  } catch (err) {
+    console.error('Error updating user:', err);
+    return response.status(500).send('Internal server error');
   }
 });
 
