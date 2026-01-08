@@ -4,7 +4,13 @@ import {
   Typography, 
   Card, 
   CardContent, 
-  Divider 
+  Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Button,
+  Box
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import './userPhotos.css';
@@ -50,13 +56,21 @@ const renderCommentWithMentions = (commentText, mentions, users) => {
   return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
-function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete, onLikeToggle, onFavoriteToggle }) {
+function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId, onPhotoDelete, onCommentDelete, onLikeToggle, onFavoriteToggle, onTagUpdate }) {
   const [commentText, setCommentText] = React.useState('');
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const [suggestions, setSuggestions] = React.useState([]);
   const [users, setUsers] = React.useState([]);
   const [cursorPosition, setCursorPosition] = React.useState(0);
   const inputRef = React.useRef(null);
+
+  // Tagging state
+  const [isSelecting, setIsSelecting] = React.useState(false);
+  const [selectionRect, setSelectionRect] = React.useState(null);
+  const [selectedUserId, setSelectedUserId] = React.useState('');
+  const [imageRect, setImageRect] = React.useState(null);
+  const [hoveredTag, setHoveredTag] = React.useState(null);
+  const imageRef = React.useRef(null);
 
   // Load users for autocomplete on mount
   React.useEffect(() => {
@@ -68,6 +82,24 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId
         console.error('Error fetching users:', error);
       });
   }, []);
+
+  // Set up image rectangle when image loads
+  React.useEffect(() => {
+    if (imageRef.current) {
+      const updateImageRect = () => {
+        const rect = imageRef.current.getBoundingClientRect();
+        setImageRect({
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height
+        });
+      };
+      updateImageRect();
+      window.addEventListener('resize', updateImageRect);
+      return () => window.removeEventListener('resize', updateImageRect);
+    }
+  }, [photo]);
 
   const handleInputChange = (e) => {
     const value = e.target.value;
@@ -130,17 +162,184 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId
     setShowSuggestions(false);
   };
 
+  // Tagging handlers
+  const handleImageMouseDown = (e) => {
+    if (!imageRect) return;
+    e.preventDefault();
+    const rect = imageRect;
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    setIsSelecting(true);
+    setSelectionRect({
+      startX: x,
+      startY: y,
+      endX: x,
+      endY: y
+    });
+  };
+
+  const handleImageMouseMove = (e) => {
+    if (!isSelecting || !imageRect) return;
+    const rect = imageRect;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    setSelectionRect(prev => ({
+      ...prev,
+      endX: x,
+      endY: y
+    }));
+  };
+
+  const handleImageMouseUp = () => {
+    if (!isSelecting) return;
+    setIsSelecting(false);
+    const rect = selectionRect;
+    const width = Math.abs(rect.endX - rect.startX);
+    const height = Math.abs(rect.endY - rect.startY);
+    if (width > 0.01 && height > 0.01) {
+      // Valid selection
+      setSelectionRect({
+        x: Math.min(rect.startX, rect.endX),
+        y: Math.min(rect.startY, rect.endY),
+        width: width,
+        height: height
+      });
+    } else {
+      setSelectionRect(null);
+    }
+  };
+
+  const handleTagSubmit = () => {
+    if (!selectionRect || !selectedUserId) return;
+    const tagData = {
+      user_id: selectedUserId,
+      x: selectionRect.x,
+      y: selectionRect.y,
+      width: selectionRect.width,
+      height: selectionRect.height
+    };
+    axios.post(`/photos/${photo._id}/tags`, tagData)
+      .then(response => {
+        onTagUpdate(photo._id, response.data);
+        setSelectionRect(null);
+        setSelectedUserId('');
+      })
+      .catch(error => {
+        console.error('Error creating tag:', error);
+        alert('Failed to create tag');
+      });
+  };
+
+  const handleTagDelete = (tagId) => {
+    axios.delete(`/photos/${photo._id}/tags/${tagId}`)
+      .then(() => {
+        onTagUpdate(photo._id, photo.tags.filter(tag => tag._id !== tagId));
+      })
+      .catch(error => {
+        console.error('Error deleting tag:', error);
+        alert('Failed to delete tag');
+      });
+  };
+
   return (
     <Card 
       className={`photo-card ${isHighlighted ? 'highlighted' : ''}`}
       ref={photoRef}
       sx={{ mb: 2 }}
     >
-      <img
-        className="photo-img"
-        src={`/images/${photo.file_name}`}
-        alt="user upload"
-      />
+      <div 
+        style={{ 
+          position: 'relative',
+          display: 'inline-block',
+          width: '100%'
+        }}
+        onMouseDown={handleImageMouseDown}
+        onMouseMove={handleImageMouseMove}
+        onMouseUp={handleImageMouseUp}
+        onMouseLeave={handleImageMouseUp}
+      >
+        <img
+          ref={imageRef}
+          className="photo-img"
+          src={`/images/${photo.file_name}`}
+          alt="user upload"
+          style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
+        />
+        
+        {/* Render selection rectangle */}
+        {selectionRect && selectionRect.startX !== undefined && (
+          <div
+            style={{
+              position: 'absolute',
+              left: `${Math.min(selectionRect.startX, selectionRect.endX) * 100}%`,
+              top: `${Math.min(selectionRect.startY, selectionRect.endY) * 100}%`,
+              width: `${Math.abs(selectionRect.endX - selectionRect.startX) * 100}%`,
+              height: `${Math.abs(selectionRect.endY - selectionRect.startY) * 100}%`,
+              border: '2px solid #1976d2',
+              backgroundColor: 'rgba(25, 118, 210, 0.1)',
+              boxSizing: 'border-box'
+            }}
+          />
+        )}
+
+        {/* Render existing tags */}
+        {photo.tags && photo.tags.map(tag => (
+          <div
+            key={tag._id}
+            style={{
+              position: 'absolute',
+              left: `${tag.x * 100}%`,
+              top: `${tag.y * 100}%`,
+              width: `${tag.width * 100}%`,
+              height: `${tag.height * 100}%`,
+              border: '2px solid #4caf50',
+              boxSizing: 'border-box',
+              cursor: 'pointer'
+            }}
+            onMouseEnter={() => setHoveredTag(tag._id)}
+            onMouseLeave={() => setHoveredTag(null)}
+          >
+            {hoveredTag === tag._id && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '-30px',
+                  left: '0',
+                  backgroundColor: '#333',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  whiteSpace: 'nowrap',
+                  zIndex: 1000
+                }}
+              >
+                {tag.user.first_name} {tag.user.last_name}
+                {tag.created_by === currentUserId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTagDelete(tag._id);
+                    }}
+                    style={{
+                      marginLeft: '8px',
+                      padding: '2px 6px',
+                      backgroundColor: '#f44336',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      fontSize: '11px'
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
       <CardContent>
         <Typography variant="caption">
           Taken: {prettyDate(photo.date_time)}
@@ -226,6 +425,68 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef, currentUserId
         )}
         
         <Divider sx={{ my: 1 }} />
+
+        {/* Tagging interface */}
+        {selectionRect && !selectionRect.startX && (
+          <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#f5f5f5', borderRadius: 4 }}>
+            <Typography variant="body2" style={{ marginBottom: 8 }}>
+              Tag this person:
+            </Typography>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                marginBottom: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ddd',
+                fontFamily: 'inherit'
+              }}
+            >
+              <option value="">-- Select a user --</option>
+              {users.map(user => (
+                <option key={user._id} value={user._id}>
+                  {user.first_name} {user.last_name}
+                </option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleTagSubmit}
+                disabled={!selectedUserId}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: selectedUserId ? '#4caf50' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: selectedUserId ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Create Tag
+              </button>
+              <button
+                onClick={() => {
+                  setSelectionRect(null);
+                  setSelectedUserId('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: '#999',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         
         {/* Existing comments */}
         <div className="comments">
@@ -459,6 +720,16 @@ class UserPhotos extends React.Component {
       });
   };
 
+  updatePhotoTags = (photoId, updatedTags) => {
+    this.setState(prevState => ({
+      photos: prevState.photos.map(p =>
+        p._id === photoId
+          ? { ...p, tags: updatedTags }
+          : p
+      )
+    }));
+  };
+
   render() {
     const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
@@ -473,6 +744,7 @@ class UserPhotos extends React.Component {
             onCommentDelete={this.deleteComment}
             onLikeToggle={this.toggleLike}
             onFavoriteToggle={this.toggleFavorite}
+            onTagUpdate={this.updatePhotoTags}
             currentUserId={this.props.currentUserId}
             isHighlighted={highlightedPhotoId === p._id}
             photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}

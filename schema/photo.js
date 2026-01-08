@@ -3,8 +3,21 @@
 const mongoose = require("mongoose");
 
 /**
- * Define the Mongoose Schema for a Comment.
+ * Define the Mongoose Schema for a Photo Tag.
  */
+const tagSchema = new mongoose.Schema({
+  // The ID of the user being tagged
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // The ID of the user who created this tag
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // Relative position of the tag (0-1 scale)
+  x: { type: Number, required: true, min: 0, max: 1 },
+  y: { type: Number, required: true, min: 0, max: 1 },
+  width: { type: Number, required: true, min: 0, max: 1 },
+  height: { type: Number, required: true, min: 0, max: 1 },
+  // The date and time when the tag was created
+  date_time: { type: Date, default: Date.now },
+});
 const commentSchema = new mongoose.Schema({
   // The text of the comment.
   comment: String,
@@ -41,6 +54,8 @@ const photoSchema = new mongoose.Schema({
   sharing_list: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   // Array of user IDs who have liked this photo.
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // Array of tag objects representing the tags on this photo.
+  tags: [tagSchema],
 });
 
 /**

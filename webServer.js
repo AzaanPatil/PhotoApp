@@ -340,6 +340,26 @@ app.get("/photosOfUser/:id", async function (request, response) {
         isFavorited = user && user.favorites && user.favorites.some(id => id.equals(photo._id));
       }
 
+      // Process tags
+      const processedTags = await Promise.all((photo.tags || []).map(async (tag) => {
+        const taggedUser = await User.findById(tag.user_id, 'first_name last_name');
+        return {
+          _id: tag._id,
+          user_id: tag.user_id,
+          created_by: tag.created_by,
+          x: tag.x,
+          y: tag.y,
+          width: tag.width,
+          height: tag.height,
+          date_time: tag.date_time,
+          user: {
+            _id: taggedUser._id,
+            first_name: taggedUser.first_name,
+            last_name: taggedUser.last_name
+          }
+        };
+      }));
+
       return {
         _id: photo._id,
         user_id: photo.user_id,
@@ -349,7 +369,8 @@ app.get("/photosOfUser/:id", async function (request, response) {
         sharing_list: photo.sharing_list, // Include sharing info for frontend display
         likes: photo.likes || [], // Include likes array
         likeCount: (photo.likes || []).length, // Include like count for sorting
-        isFavorited: isFavorited // Include favorite status for current user
+        isFavorited: isFavorited, // Include favorite status for current user
+        tags: processedTags // Include processed tags
       };
     }));
 
@@ -991,6 +1012,147 @@ app.get('/favorites', requireAuth, async (request, response) => {
   } catch (err) {
     console.error('Error getting favorites:', err);
     response.status(500).send('Internal server error');
+  }
+});
+
+// PHOTO TAGGING ENDPOINTS
+// =======================
+
+/**
+ * POST /photos/:photo_id/tags
+ * Add a tag to a photo
+ * 
+ * Request body: { user_id: string, x: number, y: number, width: number, height: number }
+ * Response: { success: true, tag: tagObject }
+ * 
+ * Security: Requires authentication, validates photo exists and user can view it
+ */
+app.post('/photos/:photo_id/tags', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const currentUserId = request.session.userId;
+    const { user_id, x, y, width, height } = request.body;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return response.status(400).json({ error: 'Invalid user ID format' });
+    }
+
+    // Validate position data
+    if (typeof x !== 'number' || typeof y !== 'number' || 
+        typeof width !== 'number' || typeof height !== 'number' ||
+        x < 0 || x > 1 || y < 0 || y > 1 || 
+        width < 0 || width > 1 || height < 0 || height > 1) {
+      return response.status(400).json({ error: 'Invalid position data' });
+    }
+
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Check if user can view this photo
+    if (!canUserViewPhoto(photo, currentUserId)) {
+      return response.status(403).json({ error: 'You do not have permission to view this photo' });
+    }
+
+    // Check if the tagged user exists
+    const taggedUser = await User.findById(user_id);
+    if (!taggedUser) {
+      return response.status(404).json({ error: 'Tagged user not found' });
+    }
+
+    // Create the tag
+    const newTag = {
+      user_id: user_id,
+      created_by: currentUserId,
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      date_time: new Date()
+    };
+
+    if (!photo.tags) {
+      photo.tags = [];
+    }
+    photo.tags.push(newTag);
+    await photo.save();
+
+    // Populate the user data for the response
+    const populatedTag = {
+      ...newTag,
+      _id: photo.tags[photo.tags.length - 1]._id,
+      user: {
+        _id: taggedUser._id,
+        first_name: taggedUser.first_name,
+        last_name: taggedUser.last_name
+      }
+    };
+
+    return response.status(200).json({ 
+      success: true, 
+      tag: populatedTag
+    });
+  } catch (err) {
+    console.error('Error adding tag to photo:', err);
+    return response.status(500).send('Internal server error');
+  }
+});
+
+/**
+ * DELETE /photos/:photo_id/tags/:tag_id
+ * Remove a tag from a photo
+ * 
+ * Response: { success: true }
+ * 
+ * Security: Requires authentication, only tag creator or photo owner can delete
+ */
+app.delete('/photos/:photo_id/tags/:tag_id', requireAuth, async (request, response) => {
+  try {
+    const photoId = request.params.photo_id;
+    const tagId = request.params.tag_id;
+    const currentUserId = request.session.userId;
+
+    if (!mongoose.Types.ObjectId.isValid(photoId)) {
+      return response.status(400).json({ error: 'Invalid photo ID format' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(tagId)) {
+      return response.status(400).json({ error: 'Invalid tag ID format' });
+    }
+
+    const photo = await Photo.findById(photoId);
+    if (!photo) {
+      return response.status(404).json({ error: 'Photo not found' });
+    }
+
+    // Find the tag
+    const tagIndex = photo.tags ? photo.tags.findIndex(tag => tag._id.equals(tagId)) : -1;
+    if (tagIndex === -1) {
+      return response.status(404).json({ error: 'Tag not found' });
+    }
+
+    const tag = photo.tags[tagIndex];
+
+    // Check permissions: only tag creator or photo owner can delete
+    if (!tag.created_by.equals(currentUserId) && !photo.user_id.equals(currentUserId)) {
+      return response.status(403).json({ error: 'You do not have permission to delete this tag' });
+    }
+
+    // Remove the tag
+    photo.tags.splice(tagIndex, 1);
+    await photo.save();
+
+    return response.status(200).json({ 
+      success: true
+    });
+  } catch (err) {
+    console.error('Error removing tag from photo:', err);
+    return response.status(500).send('Internal server error');
   }
 });
 
