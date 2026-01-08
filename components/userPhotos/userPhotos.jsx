@@ -559,7 +559,9 @@ class UserPhotos extends React.Component {
     super(props);
     this.state = {
       photos: [],
-      highlightedPhotoId: null
+      highlightedPhotoId: null,
+      // index of currently viewed photo in single-photo viewer
+      currentIndex: 0
     };
     this.photoRefs = {};
   }
@@ -567,6 +569,20 @@ class UserPhotos extends React.Component {
   componentDidMount() {
     this.loadPhotos();
     this.checkForHighlightedPhoto();
+    // Listen for history changes so browser back/forward updates viewer
+    if (this.props.history && this.props.history.listen) {
+      this.unlisten = this.props.history.listen((location, action) => {
+        const params = new URLSearchParams(location.search);
+        const photoId = params.get('photoId');
+        if (photoId && this.state.photos && this.state.photos.length) {
+          this.setCurrentIndexByPhotoId(photoId);
+        }
+      });
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.unlisten) this.unlisten();
   }
 
   componentDidUpdate(prevProps) {
@@ -583,10 +599,22 @@ class UserPhotos extends React.Component {
     
     if (photoId) {
       this.setState({ highlightedPhotoId: photoId });
-      // Use setTimeout to ensure DOM is ready
-      setTimeout(() => {
-        this.scrollToPhoto(photoId);
-      }, 100);
+      // If photos already loaded, set current index to match photoId
+      if (this.state.photos && this.state.photos.length) {
+        this.setCurrentIndexByPhotoId(photoId);
+      } else {
+        // Use setTimeout to ensure DOM is ready once photos load
+        setTimeout(() => {
+          this.scrollToPhoto(photoId);
+        }, 100);
+      }
+    }
+  }
+
+  setCurrentIndexByPhotoId(photoId) {
+    const idx = this.state.photos.findIndex(p => p._id === photoId);
+    if (idx !== -1) {
+      this.setState({ currentIndex: idx });
     }
   }
 
@@ -601,11 +629,10 @@ class UserPhotos extends React.Component {
     const userId = this.props.match.params.userId;
     axios.get(`/photosOfUser/${userId}`)
       .then(response => {
-        this.setState({ photos: response.data });
-        // After photos are loaded, check if we need to highlight and scroll
-        setTimeout(() => {
+        this.setState({ photos: response.data }, () => {
+          // After photos are loaded, if URL had a photoId, set currentIndex
           this.checkForHighlightedPhoto();
-        }, 50);
+        });
       })
       .catch(error => {
         console.error('Error fetching photos:', error);
@@ -733,12 +760,52 @@ class UserPhotos extends React.Component {
   render() {
     const { photos, highlightedPhotoId } = this.state;
     if (!photos) return <p>Loading photos...</p>;
+
+    // Single-photo viewer mode: show one photo at a time with stepper
+    const { currentIndex } = this.state;
+    const total = photos.length;
+    const safeIndex = Math.max(0, Math.min(currentIndex || 0, total - 1));
+    const currentPhoto = photos[safeIndex];
+
+    const goToIndex = (idx) => {
+      if (idx < 0 || idx >= total) return;
+      const photo = photos[idx];
+      // update URL query param so bookmarking works
+      const params = new URLSearchParams(this.props.location.search);
+      params.set('photoId', photo._id);
+      // Use history.replace to avoid piling up identical states
+      if (this.props.history && this.props.history.replace) {
+        this.props.history.push({ search: params.toString() });
+      } else {
+        window.history.pushState({}, '', `?${params.toString()}`);
+      }
+      this.setState({ currentIndex: idx });
+    };
+
+    const handlePrev = () => goToIndex(safeIndex - 1);
+    const handleNext = () => goToIndex(safeIndex + 1);
+
     return (
-      <div className="photos">
-        {photos.map((p) => (
+      <div className="photo-viewer" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <button onClick={handlePrev} disabled={safeIndex <= 0} style={{ padding: '8px 12px', cursor: safeIndex <= 0 ? 'not-allowed' : 'pointer' }}>
+            ◀ Previous
+          </button>
+
+          <div style={{ textAlign: 'center' }}>
+            <strong>{`Photo ${safeIndex + 1} of ${total}`}</strong>
+            <div style={{ fontSize: 12, color: '#666' }}>{currentPhoto ? currentPhoto.file_name : ''}</div>
+          </div>
+
+          <button onClick={handleNext} disabled={safeIndex >= total - 1} style={{ padding: '8px 12px', cursor: safeIndex >= total - 1 ? 'not-allowed' : 'pointer' }}>
+            Next ▶
+          </button>
+        </div>
+
+        {currentPhoto ? (
           <PhotoCard 
-            key={p._id} 
-            photo={p} 
+            key={currentPhoto._id}
+            photo={currentPhoto}
             onAddComment={this.addComment}
             onPhotoDelete={this.deletePhoto}
             onCommentDelete={this.deleteComment}
@@ -746,11 +813,9 @@ class UserPhotos extends React.Component {
             onFavoriteToggle={this.toggleFavorite}
             onTagUpdate={this.updatePhotoTags}
             currentUserId={this.props.currentUserId}
-            isHighlighted={highlightedPhotoId === p._id}
-            photoRef={(ref) => { if (ref) this.photoRefs[p._id] = ref; }}
+            isHighlighted={highlightedPhotoId === currentPhoto._id}
           />
-        ))}
-        {photos.length === 0 && (
+        ) : (
           <Typography variant="body2">No photos for this user</Typography>
         )}
       </div>
