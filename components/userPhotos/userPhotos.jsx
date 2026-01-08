@@ -11,8 +11,113 @@ import './userPhotos.css';
 
 const prettyDate = (parm) => new Date(parm).toLocaleString();
 
+// Function to render comment text with highlighted @mentions
+const renderCommentWithMentions = (commentText, mentions, users) => {
+  if (!mentions || mentions.length === 0 || !users || users.length === 0) {
+    return commentText;
+  }
+
+  // Create a map of user ID to user object for quick lookup
+  const userMap = {};
+  users.forEach(user => {
+    userMap[user._id] = user;
+  });
+
+  // Replace @mentions with links
+  let processedText = commentText;
+  mentions.forEach(mentionId => {
+    const user = userMap[mentionId];
+    if (user) {
+      const fullName = `${user.first_name} ${user.last_name}`;
+      const firstNameOnly = user.first_name;
+      
+      // Try to match "First Last" first, then just "First"
+      let mentionRegex = new RegExp(`@${fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      if (mentionRegex.test(processedText)) {
+        const link = `<a href="/users/${user._id}" style="color: #1976d2; text-decoration: none; font-weight: bold;">@${fullName}</a>`;
+        processedText = processedText.replace(mentionRegex, link);
+      } else {
+        // Try just first name
+        mentionRegex = new RegExp(`@${firstNameOnly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        if (mentionRegex.test(processedText)) {
+          const link = `<a href="/users/${user._id}" style="color: #1976d2; text-decoration: none; font-weight: bold;">@${firstNameOnly}</a>`;
+          processedText = processedText.replace(mentionRegex, link);
+        }
+      }
+    }
+  });
+
+  return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
+};
+
 function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
   const [commentText, setCommentText] = React.useState('');
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [suggestions, setSuggestions] = React.useState([]);
+  const [users, setUsers] = React.useState([]);
+  const [cursorPosition, setCursorPosition] = React.useState(0);
+  const inputRef = React.useRef(null);
+
+  // Load users for autocomplete on mount
+  React.useEffect(() => {
+    axios.get('/user/list')
+      .then(response => {
+        setUsers(response.data);
+      })
+      .catch(error => {
+        console.error('Error fetching users:', error);
+      });
+  }, []);
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    const position = e.target.selectionStart;
+    setCommentText(value);
+    setCursorPosition(position);
+
+    // Check if we're typing an @mention
+    const textBeforeCursor = value.substring(0, position);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (atIndex !== -1 && atIndex === textBeforeCursor.length - 1) {
+      // Just typed @, show all users
+      setSuggestions(users);
+      setShowSuggestions(true);
+    } else if (atIndex !== -1) {
+      // Typing after @, filter users
+      const query = textBeforeCursor.substring(atIndex + 1).toLowerCase().trim();
+      if (query.length > 0) {
+        const filtered = users.filter(user => {
+          const fullName = `${user.first_name} ${user.last_name}`.toLowerCase();
+          const firstName = user.first_name.toLowerCase();
+          const lastName = user.last_name.toLowerCase();
+          const loginName = user.login_name.toLowerCase();
+          
+          return fullName.includes(query) || 
+                 firstName.includes(query) || 
+                 lastName.includes(query) ||
+                 loginName.includes(query);
+        });
+        setSuggestions(filtered);
+        setShowSuggestions(filtered.length > 0);
+      } else {
+        setSuggestions(users);
+        setShowSuggestions(true);
+      }
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (user) => {
+    const textBeforeAt = commentText.substring(0, commentText.lastIndexOf('@'));
+    const textAfterCursor = commentText.substring(cursorPosition);
+    const mentionText = `${user.first_name} ${user.last_name}`;
+    const newText = `${textBeforeAt}@${mentionText} ${textAfterCursor}`;
+    setCommentText(newText);
+    setShowSuggestions(false);
+    inputRef.current.focus();
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -22,6 +127,7 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
     }
     onAddComment(photo._id, trimmed);
     setCommentText('');
+    setShowSuggestions(false);
   };
 
   return (
@@ -50,21 +156,39 @@ function PhotoCard({ photo, onAddComment, isHighlighted, photoRef }) {
               <Link to={`/users/${c.user._id}`}>
                 {c.user.first_name} {c.user.last_name}
               </Link>
-              <Typography variant="body2">{c.comment}</Typography>
+              <Typography variant="body2">
+                {renderCommentWithMentions(c.comment, c.mentions || [], users)}
+              </Typography>
             </div>
           ))}
         </div>
 
-        {/* New comment input (minimal UI) */}
-        <form onSubmit={handleSubmit} style={{ marginTop: 8 }}>
+        {/* New comment input (with @mention autocomplete) */}
+        <form onSubmit={handleSubmit} style={{ marginTop: 8, position: 'relative' }}>
           <input
+            ref={inputRef}
             type="text"
             value={commentText}
-            placeholder="Add a comment..."
-            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Add a comment... (@mention users)"
+            onChange={handleInputChange}
             style={{ width: '70%', marginRight: 8, padding: 4 }}
           />
           <button type="submit">Post</button>
+          
+          {/* Autocomplete suggestions */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="autocomplete-dropdown">
+              {suggestions.slice(0, 5).map((user) => (
+                <div
+                  key={user._id}
+                  className="autocomplete-item"
+                  onClick={() => handleSuggestionClick(user)}
+                >
+                  {user.first_name} {user.last_name}
+                </div>
+              ))}
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>

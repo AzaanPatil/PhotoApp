@@ -264,7 +264,8 @@ app.get("/photosOfUser/:id", async function (request, response) {
             _id: commentUser._id,
             first_name: commentUser.first_name,
             last_name: commentUser.last_name
-          }
+          },
+          mentions: comment.mentions || []
         };
       }));
 
@@ -477,7 +478,56 @@ app.post('/photos/new', requireAuth, upload.single('uploadedphoto'), async (requ
   }
 });
 
-app.post('/commentsOfPhoto/:photo_id', requireAuth, async (request, response) => {
+app.get("/user/:id/mentions", requireAuth, async function (request, response) {
+  const userId = request.params.id;
+  
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.log("Invalid user id format:", userId);
+    response.status(400).send("Invalid user ID format");
+    return;
+  }
+  
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("User with _id:", userId, " not found.");
+      response.status(400).json({ error: "User not found" });
+      return;
+    }
+
+    // Find all photos where this user is mentioned in comments
+    const photos = await Photo.find({ "comments.mentions": userId });
+
+    const processedPhotos = await Promise.all(photos.map(async (photo) => {
+      // Find the photo owner
+      const photoOwner = await User.findById(photo.user_id, 'first_name last_name');
+      
+      // Find comments that mention this user
+      const mentioningComments = photo.comments.filter(comment => 
+        comment.mentions && comment.mentions.includes(userId)
+      );
+
+      return {
+        _id: photo._id,
+        file_name: photo.file_name,
+        date_time: photo.date_time,
+        owner: {
+          _id: photoOwner._id,
+          first_name: photoOwner.first_name,
+          last_name: photoOwner.last_name
+        },
+        mentionCount: mentioningComments.length
+      };
+    }));
+
+    response.status(200).json(processedPhotos);
+  } catch (err) {
+    console.error("Error fetching mentions:", err);
+    response.status(500).send("Internal server error");
+  }
+});
+
+app.post('/photos/:photo_id/comments', requireAuth, async (request, response) => {
   const photoId = request.params.photo_id;
   const text = (request.body.comment || '').trim();
 
@@ -495,10 +545,58 @@ app.post('/commentsOfPhoto/:photo_id', requireAuth, async (request, response) =>
       return response.status(400).send('Photo not found');
     }
 
+    // Parse @mentions from the comment text
+    const mentionRegex = /@(\w+(?:\s+\w+)?)/g;
+    const mentionedNames = [];
+    let match;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      mentionedNames.push(match[1].toLowerCase().replace(/\s+/g, ' ').trim());
+    }
+
+    // Validate mentioned users exist
+    const mentionedUsers = [];
+    if (mentionedNames.length > 0) {
+      // Find users by first name, last name, or full name
+      const users = await User.find({}, '_id first_name last_name login_name');
+      
+      const foundUsers = [];
+      mentionedNames.forEach(name => {
+        const nameParts = name.split(' ');
+        let user = null;
+        
+        if (nameParts.length === 1) {
+          // Single name - could be first name or login name
+          user = users.find(u => 
+            u.first_name.toLowerCase() === name ||
+            u.login_name === name
+          );
+        } else if (nameParts.length === 2) {
+          // Full name
+          user = users.find(u => 
+            (u.first_name.toLowerCase() === nameParts[0] && u.last_name.toLowerCase() === nameParts[1]) ||
+            (u.first_name.toLowerCase() === nameParts[0] && u.last_name.toLowerCase() === nameParts[1])
+          );
+        }
+        
+        if (user && !foundUsers.find(u => u._id.equals(user._id))) {
+          foundUsers.push(user);
+        }
+      });
+
+      if (foundUsers.length !== mentionedNames.length) {
+        const foundNames = foundUsers.map(u => `${u.first_name} ${u.last_name}`.toLowerCase());
+        const invalidMentions = mentionedNames.filter(name => !foundNames.includes(name));
+        return response.status(400).send(`Invalid user mention(s): @${invalidMentions.join(', @')}`);
+      }
+      
+      mentionedUsers.push(...foundUsers.map(u => u._id));
+    }
+
     const newComment = {
       comment: text,
       date_time: new Date(),
-      user_id: request.session.userId
+      user_id: request.session.userId,
+      mentions: mentionedUsers
     };
 
     photo.comments.push(newComment);

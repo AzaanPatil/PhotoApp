@@ -19,8 +19,11 @@ class UserDetail extends React.Component {
       user: null,
       recentPhoto: null,
       mostCommentedPhoto: null,
+      mentions: [],
       usageLoading: true,
-      usageError: null
+      usageError: null,
+      mentionsLoading: true,
+      mentionsError: null
     };
     this.recentThumbRef = React.createRef();
     this.mostCommentedThumbRef = React.createRef();
@@ -30,6 +33,7 @@ class UserDetail extends React.Component {
   componentDidMount() {
     this.loadUser();
     this.loadUsageInfo();
+    this.loadMentions();
   }
 
   // Reload user data if the userId prop changes
@@ -37,6 +41,7 @@ class UserDetail extends React.Component {
     if (prevProps.match.params.userId !== this.props.match.params.userId) {
       this.loadUser();
       this.loadUsageInfo();
+      this.loadMentions();
     }
   }
 
@@ -78,6 +83,23 @@ class UserDetail extends React.Component {
       });
   }
 
+  loadMentions() {
+    const userId = this.props.match.params.userId;
+    this.setState({ mentionsLoading: true, mentionsError: null });
+    axios.get(`/user/${userId}/mentions`)
+      .then(response => {
+        this.setState({
+          mentions: response.data,
+          mentionsLoading: false,
+          mentionsError: null
+        });
+      })
+      .catch(error => {
+        this.setState({ mentionsLoading: false, mentionsError: 'Error loading mentions' });
+        console.error('Error loading mentions:', error);
+      });
+  }
+
   // loadUsageInfo fetches both usage-related endpoints in parallel using
   // Promise.all. Both endpoints perform server-side computation so the
   // client simply renders the received metadata (thumbnail filename,
@@ -89,6 +111,14 @@ class UserDetail extends React.Component {
     // Navigate to user photos view and scroll to the selected photo
     this.props.history.push({
       pathname: `/photos/${this.props.match.params.userId}`,
+      state: { scrollToPhotoId: photoId }
+    });
+  };
+
+  // Handle clicking on a mention thumbnail - navigate to the photo owner's page and scroll to photo
+  handleMentionClick = (photoId, ownerId) => {
+    this.props.history.push({
+      pathname: `/photos/${ownerId}`,
       state: { scrollToPhotoId: photoId }
     });
   };
@@ -158,6 +188,46 @@ class UserDetail extends React.Component {
     );
   }
 
+  renderMentions() {
+    const { mentions, mentionsLoading, mentionsError } = this.state;
+    if (mentionsLoading) {
+      return <Typography className="mentions-info" color="textSecondary">Loading mentions...</Typography>;
+    }
+    if (mentionsError) {
+      return <Typography className="mentions-info" color="error">{mentionsError}</Typography>;
+    }
+    if (!mentions || mentions.length === 0) {
+      return <Typography className="mentions-info" color="textSecondary">No photos mention this user.</Typography>;
+    }
+    return (
+      <div className="mentions-info">
+        <div className="mentions-title">Photos That Mention {this.state.user?.first_name} {this.state.user?.last_name}</div>
+        <div className="mentions-list">
+          {mentions.map((photo) => (
+            <div key={photo._id} className="mention-item">
+              <div className="mention-thumbnail-container">
+                <img
+                  src={photo.file_name ? `/images/${photo.file_name}` : ''}
+                  alt="Mentioned in photo"
+                  className="mention-thumbnail-image"
+                  onClick={() => this.handleMentionClick(photo._id, photo.owner._id)}
+                />
+                <div className="mention-owner">
+                  <Link to={`/users/${photo.owner._id}`}>
+                    {photo.owner.first_name} {photo.owner.last_name}
+                  </Link>
+                </div>
+                <div className="mention-count">
+                  Mentioned {photo.mentionCount} time{photo.mentionCount !== 1 ? 's' : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   render() {
     const { user } = this.state;
     if (!user) {
@@ -183,6 +253,7 @@ class UserDetail extends React.Component {
             {user.description}
           </Typography>
           {this.renderUsageInfo()}
+          {this.renderMentions()}
           <Button
             variant="contained"
             color="primary"
